@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["**", "!**/node_modules/**/*"]
+    "includes": ["**", "!**/node_modules/**/*", "!**/dist/**/*"]
   },
   "vcs": {
     "useIgnoreFile": true

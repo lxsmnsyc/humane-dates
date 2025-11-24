@@ -1,11 +1,11 @@
-import { createFeed, moreFeed } from './feed';
-import { pattern, type Token } from './matcher';
+import { createFeed, moreFeed } from '../core/feed';
+import { pattern, type Token } from '../core/matcher';
 
 const TOKEN = [
   pattern('whitespace', '\\s+'),
   pattern('number', '[0-9]+'),
-  pattern('ident', '\\w+', 'i'),
-  pattern('op', '[:,.\\-+\\\\\\/@]'),
+  pattern('ident', '[a-zA-Z0-9.]+', 'i'),
+  pattern('op', '[:]'),
   pattern('ignore', '.'),
 ];
 

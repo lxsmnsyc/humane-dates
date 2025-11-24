@@ -35,14 +35,26 @@ export interface MultiAST {
 
 export interface MaybeAST {
   type: 'ast';
-  tag: string;
   kind: 'maybe';
   children?: AST | Token;
 }
 
 export type AST = SingleAST | MultiAST | MaybeAST;
 
-export type ASTMatcher = (feed: TokenFeed) => AST | Token | null;
+export type ASTMatcher = (feed: TokenFeed) => AST | Token | undefined;
+
+export function either<T extends ASTMatcher[]>(...args: T): ASTMatcher {
+  return (feed: TokenFeed) => {
+    for (let i = 0, len = args.length; i < len; i++) {
+      const result = args[i](feed);
+
+      if (result) {
+        return result;
+      }
+    }
+    return undefined;
+  };
+}
 
 export function alternation<T extends ASTMatcher[]>(
   tag: string,
@@ -61,7 +73,7 @@ export function alternation<T extends ASTMatcher[]>(
         };
       }
     }
-    return null;
+    return undefined;
   };
 }
 
@@ -69,7 +81,7 @@ export function sequence<T extends ASTMatcher[]>(
   tag: string,
   grammar: T,
 ): ASTMatcher {
-  return (feed: TokenFeed): AST | null => {
+  return (feed: TokenFeed): AST | undefined => {
     const results: (Token | AST)[] = [];
     const { cursor } = feed;
     for (let i = 0, len = grammar.length; i < len; i += 1) {
@@ -79,7 +91,7 @@ export function sequence<T extends ASTMatcher[]>(
         results.push(result);
       } else {
         feed.cursor = cursor;
-        return null;
+        return undefined;
       }
     }
     return {
@@ -91,15 +103,11 @@ export function sequence<T extends ASTMatcher[]>(
   };
 }
 
-export function optional<T extends ASTMatcher>(
-  tag: string,
-  grammar: T,
-): ASTMatcher {
+export function optional<T extends ASTMatcher>(grammar: T): ASTMatcher {
   return (feed: TokenFeed): AST => {
     const result = grammar(feed);
     return {
       type: 'ast',
-      tag: `optional(${tag})`,
       kind: 'maybe',
       children: result ?? undefined,
     };
@@ -115,7 +123,7 @@ export function match(filter: (token: Token) => boolean): ASTMatcher {
         return current;
       }
     }
-    return null;
+    return undefined;
   };
 }
 

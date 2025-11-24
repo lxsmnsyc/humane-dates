@@ -1,22 +1,6 @@
-import type { Token } from '../core/matcher';
-import { tokenize } from '../core/tokenizer';
+import { getDateTime } from './ast/date-time';
 import { parseDateTime } from './parser';
-
-function cleanTokens(tokens: Token[]): Token[] {
-  const result: Token[] = [];
-  for (let i = 0, len = tokens.length; i < len; i++) {
-    const token = tokens[i];
-    switch (token.tag) {
-      case 'ignore':
-      case 'whitespace':
-        break;
-      default:
-        result.push(token);
-        break;
-    }
-  }
-  return result;
-}
+import { tokenize } from './tokenizer';
 
 export interface FromHumaneDateOptions {
   referenceDate?: Date;
@@ -24,19 +8,20 @@ export interface FromHumaneDateOptions {
 
 export function from(
   input: string,
-  {
-    referenceDate = new Date(),
-  }: FromHumaneDateOptions = {},
+  { referenceDate = new Date() }: FromHumaneDateOptions = {},
 ): Date {
-  const tokens = cleanTokens(tokenize(input));
+  const tokens = tokenize(input);
   const [parsed] = parseDateTime(tokens);
   console.dir(parsed, {
+    depth: null,
+  });
+  const tree = getDateTime(parsed);
+  console.dir(tree, {
     depth: null,
   });
   return referenceDate;
 }
 
-export interface ToHumaneDateOptions {
-}
+export type ToHumaneDateOptions = {};
 
 export function to(date: Date): string {}

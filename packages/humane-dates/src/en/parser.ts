@@ -3,6 +3,7 @@ import {
   type AST,
   alternation,
   createTokenFeed,
+  either,
   literal,
   optional,
   regex,
@@ -10,7 +11,12 @@ import {
   tag,
 } from '../core/token';
 
+const WHITESPACE = tag('whitespace');
+const OPT_WHITESPACE = optional(WHITESPACE);
+
 const NUMBER = tag('number');
+const ORDINAL = regex('ident', /^(st|nd|rd|th)$/i);
+const SINGULAR = regex('ident', /^an?$/i);
 
 const SECONDS = regex('number', /^[0-5]?[0-9]$/);
 const MINUTES = regex('number', /^[0-5]?[0-9]$/);
@@ -25,51 +31,27 @@ const AGO = regex('ident', /^ago$/i);
 const ON = regex('ident', /^on$/i);
 const IN = regex('ident', /^in$/i);
 const AT = regex('ident', /^at$/i);
-const MERIDIEM = regex('ident', /^(a|p)\.?m\.?$/i);
+// const OF = regex('ident', /^of$/i);
+const YEAR = regex('ident', /^year$/i);
+
+const MERIDIEM = regex('ident', /^(a|p)\.?m\.?/i);
 const TIME_UNIT = alternation('time-unit', [
-  regex('ident', /^(hours?|minutes?|seconds?)$/i),
-  regex('ident', /^((hrs?|mins?|secs?)\.?)$/i),
+  regex('ident', /^hours?|minutes?|seconds?$/i),
+  regex('ident', /^(hrs?|mins?|secs?)\.?$/i),
 ]);
+const DATE_UNIT = alternation('date-unit', [
+  regex('ident', /^days?|weeks?|months?|years?$/i),
+  regex('ident', /^(wks?|mos?|yrs?)\.?$/i),
+]);
+
 const COMPLETE = regex('ident', /^(now)$/i);
 const COMPLETE_TIME = regex('ident', /^(midnight)$/i);
-const COMPLETE_DATE = regex('ident', /^(today|tomorrow|yesterday)$/i);
+const COMPLETE_DATE = regex('ident', /^(tomorrow|today|yesterday)$/i);
 
 const PARTIAL_RELATIONAL = regex('ident', /^(before|after|until|from|past)$/i);
 const PARTIAL_COMPLETE = regex('ident', /^(last|next|this)$/i);
 
-const FULL_TIME = alternation('full-time', [
-  // Match 12-hour clock
-  sequence('12-hour', [
-    HOUR_12,
-    optional(
-      'minutes-part',
-      sequence('minutes-part', [
-        COLON,
-        MINUTES,
-        optional('seconds-part', sequence('seconds-part', [COLON, SECONDS])),
-      ]),
-    ),
-    MERIDIEM,
-  ]),
-  // Match 24-hour clock
-  sequence('24-hour', [
-    HOUR_24,
-    COLON,
-    MINUTES,
-    optional('seconds-part', sequence('seconds-part', [COLON, SECONDS])),
-  ]),
-  // Match partial complete
-  sequence('date-partial', [PARTIAL_COMPLETE, TIME_UNIT]),
-  // Match complete,
-  COMPLETE_TIME,
-]);
-
-const RELATIONAL_TIME = alternation('relational-time', [
-  // Match at (time)
-  sequence('time-6', [AT, FULL_TIME]),
-]);
-
-const TIME = alternation('time', [FULL_TIME, RELATIONAL_TIME]);
+// const ORDER = regex('ident', /^(start|end|first|last)$/i);
 
 const MONTHS = alternation('months', [
   regex(
@@ -85,89 +67,157 @@ const DAYS = alternation('days', [
   ),
   regex('ident', /^(sun|mon|tue|wed|thu|fri|sat)\.?$/i),
 ]);
-const DATE_UNIT = alternation('date-unit', [
-  regex('ident', /^(days?|weeks?|months?|years?|decades?)$/i),
-  regex('ident', /^(wks?|yrs?)\.?$/i),
-]);
-const SINGULAR_DATE_UNIT = alternation('date-unit', [
-  regex('ident', /^(day|week|month|year|decade)$/i),
-  regex('ident', /^(wk?|yr)\.?$/i),
-]);
-const ORDINAL = regex('ident', /^(st|nd|rd|th)$/i);
+const YEARS = regex('number', /^[1-9][0-9][0-9][0-9]+$/i);
 
-const DAY_PART = alternation('day-part', [
-  sequence('day-1', [NUMBER, ORDINAL]),
-  NUMBER,
+const ORDINAL_NUMBER = sequence('ordinal-number', [NUMBER, ORDINAL]);
+
+const TIME_VALUE = sequence('time-value', [
+  either(NUMBER, SINGULAR),
+  WHITESPACE,
+  TIME_UNIT,
 ]);
+const DATE_VALUE = sequence('date-value', [
+  either(NUMBER, SINGULAR),
+  WHITESPACE,
+  DATE_UNIT,
+]);
+
+// const TIME_PROPERTY = alternation('time-property', [
+//   sequence('time-ordinal', [ORDINAL_NUMBER, SINGULAR_TIME_UNIT]),
+//   sequence('time-order', [ORDER, SINGULAR_TIME_UNIT]),
+// ]);
+
+// const DATE_PROPERTY = alternation('date-property', [
+//   sequence('date-ordinal', [ORDINAL_NUMBER, SINGULAR_DATE_UNIT]),
+//   sequence('date-order', [ORDER, SINGULAR_DATE_UNIT]),
+// ]);
+
+const YEAR_PART = alternation('year-part', [
+  sequence('year-1', [YEAR, WHITESPACE, NUMBER]),
+  YEARS,
+]);
+
+const DAY_PART = alternation('day-part', [ORDINAL_NUMBER, NUMBER]);
 
 const MONTH_PART = alternation('month-part', [
   // Match {month} {number}
-  sequence('month-1', [MONTHS, DAY_PART]),
-  sequence('month-2', [DAY_PART, MONTHS]),
+  sequence('month-part-1', [MONTHS, WHITESPACE, DAY_PART]),
+  sequence('month-part-2', [DAY_PART, WHITESPACE, MONTHS]),
+  MONTHS,
+]);
+
+const SECONDS_PART = optional(
+  sequence('seconds-part', [OPT_WHITESPACE, COLON, OPT_WHITESPACE, SECONDS]),
+);
+const MINUTES_PART = sequence('minutes-part', [
+  OPT_WHITESPACE,
+  COLON,
+  OPT_WHITESPACE,
+  MINUTES,
+  SECONDS_PART,
+]);
+
+const FULL_TIME = alternation('full-time', [
+  // Match 12-hour clock
+  sequence('hour-12', [
+    HOUR_12,
+    optional(MINUTES_PART),
+    OPT_WHITESPACE,
+    MERIDIEM,
+  ]),
+  // Match 24-hour clock
+  sequence('hour-24', [HOUR_24, MINUTES_PART]),
+  // Match partial complete
+  sequence('partial-time', [PARTIAL_COMPLETE, WHITESPACE, TIME_UNIT]),
+  // Match complete,
+  COMPLETE_TIME,
+]);
+
+const RELATIONAL_TIME = alternation('relational-time', [
+  // Match at (time)
+  sequence('at-time', [AT, WHITESPACE, FULL_TIME]),
+]);
+
+const TIME = alternation('time', [FULL_TIME, RELATIONAL_TIME]);
+
+const SPECIFIC_DATE = alternation('specific-date', [
+  sequence('date-format-1', [MONTH_PART, WHITESPACE, YEAR_PART]),
+  sequence('date-format-2', [MONTH_PART, WHITESPACE, NUMBER]),
+  sequence('date-format-3', [YEAR_PART, WHITESPACE, MONTH_PART]),
 ]);
 
 const FULL_DATE = alternation('full-date', [
-  // Match {month} {day}, {year}
-  // TODO year format like
-  sequence('date-format-1', [MONTH_PART, NUMBER]),
-  //
-  sequence('date-format-no-year', [MONTH_PART]),
+  SPECIFIC_DATE,
   // Match partial complete
-  sequence('date-partial', [
+  sequence('partial-date', [
     PARTIAL_COMPLETE,
-    alternation('target', [
+    WHITESPACE,
+    alternation('partial-date-target', [
+      // Next January 1
       MONTH_PART,
-      SINGULAR_DATE_UNIT,
+      // Next week/month
+      DATE_UNIT,
+      // Next Sunday
       DAYS,
+      // Next January
       MONTHS,
+      // Next midnight
       COMPLETE_TIME,
     ]),
   ]),
+  // Months
+  MONTH_PART,
   // Match complete,
   COMPLETE_DATE,
 ]);
 
 const RELATIONAL_DATE = alternation('relational-date', [
-  sequence('on-date', [ON, FULL_DATE]),
+  sequence('on-date', [ON, WHITESPACE, FULL_DATE]),
 ]);
 
 const DATE = alternation('date', [FULL_DATE, RELATIONAL_DATE]);
 
-const INDEPENDENT_DATETIME = alternation('independent', [DATE, TIME, COMPLETE]);
+const INDEPENDENT_DATETIME = alternation('independent-date-time', [
+  DATE,
+  TIME,
+  COMPLETE,
+]);
 
-const INDEPENDENT_FULL = alternation('independent-full', [
+const INDEPENDENT_FULL = alternation('independent-full-date-time', [
   FULL_TIME,
   FULL_DATE,
   COMPLETE,
 ]);
 
-const DATE_TIME = alternation('datetime', [
-  sequence('date-time-1', [DATE, TIME]),
-  sequence('date-time-2', [TIME, DATE]),
-  // TODO
-  // YYYY {month} {day}
-  // YYYY {day} {month}
+const DATE_TIME = alternation('date-time', [
+  sequence('date-time-1-1', [MONTH_PART, WHITESPACE, TIME]),
+  sequence('date-time-1-2', [TIME, WHITESPACE, MONTH_PART]),
+  sequence('date-time-2-1', [DATE, WHITESPACE, TIME]),
+  sequence('date-time-2-2', [TIME, WHITESPACE, DATE]),
   // Match {number} {unit} ago
-  sequence('date-time-ago', [NUMBER, DATE_UNIT, AGO]),
-  sequence('date-time-ago', [NUMBER, TIME_UNIT, AGO]),
+  sequence('date-time-ago', [
+    NUMBER,
+    WHITESPACE,
+    either(TIME_UNIT, DATE_UNIT),
+    WHITESPACE,
+    AGO,
+  ]),
   // Match in {number} {unit}
-  sequence('in-date-time', [IN, NUMBER, TIME_UNIT]),
-  sequence('in-date-time', [IN, NUMBER, DATE_UNIT]),
+  sequence('in-date-time', [
+    IN,
+    WHITESPACE,
+    NUMBER,
+    WHITESPACE,
+    either(TIME_UNIT, DATE_UNIT),
+  ]),
   // Match x {unit} before/after/from/until/past (date)
-  sequence('date-time-relational', [
-    NUMBER,
-    TIME_UNIT,
+  sequence('relational-date-time', [
+    either(TIME_VALUE, DATE_VALUE),
+    WHITESPACE,
     PARTIAL_RELATIONAL,
+    WHITESPACE,
     INDEPENDENT_FULL,
   ]),
-  sequence('date-time-relational', [
-    NUMBER,
-    DATE_UNIT,
-    PARTIAL_RELATIONAL,
-    INDEPENDENT_FULL,
-  ]),
-  // TODO Match this/next/last {number} {unit}
-  // Match complete
   INDEPENDENT_DATETIME,
 ]);
 
@@ -179,6 +229,9 @@ export function parseDateTime(token: Token[]): (AST | Token)[] {
     const result = DATE_TIME(feed);
     if (result) {
       results.push(result);
+    } else {
+      console.log('whut', feed.source[feed.cursor]);
+      feed.cursor++;
     }
   }
 
