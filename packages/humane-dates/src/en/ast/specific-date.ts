@@ -1,5 +1,4 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
+import type { AST, ValueAST } from '../../core/token';
 import { getMonthPart, type MonthPartNode } from './month-part';
 import { getYearPart, type YearPartNode } from './year-part';
 
@@ -9,12 +8,8 @@ interface DateFormat1Node {
   year: YearPartNode;
 }
 
-function getDateFormat1(ast: AST | Token): DateFormat1Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-format-1'
-  ) {
+function getDateFormat1(ast: AST): DateFormat1Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-format-1') {
     // [month, whitespace, year]
     const month = getMonthPart(ast.children[0]);
     const year = getYearPart(ast.children[2]);
@@ -32,19 +27,15 @@ function getDateFormat1(ast: AST | Token): DateFormat1Node | undefined {
 interface DateFormat2Node {
   type: 'date-format-2';
   month: MonthPartNode;
-  year: Token;
+  year: ValueAST;
 }
 
-function getDateFormat2(ast: AST | Token): DateFormat2Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-format-2'
-  ) {
+function getDateFormat2(ast: AST): DateFormat2Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-format-2') {
     // [month, whitespace, number]
     const month = getMonthPart(ast.children[0]);
     const year = ast.children[1];
-    if (month && year.type === 'token') {
+    if (month && year.kind === 'value') {
       return {
         type: 'date-format-2',
         month,
@@ -61,12 +52,8 @@ interface DateFormat3Node {
   year: YearPartNode;
 }
 
-function getDateFormat3(ast: AST | Token): DateFormat3Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-format-3'
-  ) {
+function getDateFormat3(ast: AST): DateFormat3Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-format-3') {
     // [year, whitespace, month]
     const month = getMonthPart(ast.children[2]);
     const year = getYearPart(ast.children[0]);
@@ -86,14 +73,8 @@ export interface SpecificDateNode {
   value: DateFormat1Node | DateFormat2Node | DateFormat3Node;
 }
 
-export function getSpecificDate(
-  ast: AST | Token,
-): SpecificDateNode | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'solo' &&
-    ast.tag === 'specific-date'
-  ) {
+export function getSpecificDate(ast: AST): SpecificDateNode | undefined {
+  if (ast.kind === 'solo' && ast.tag === 'specific-date') {
     const result =
       getDateFormat1(ast.children) ||
       getDateFormat2(ast.children) ||

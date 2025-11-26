@@ -1,4 +1,3 @@
-import type { Token } from '../../core/matcher';
 import type { AST } from '../../core/token';
 import { type DateNode, getDate } from './date';
 import { type DateTimeAgoNode, getDateTimeAgo } from './date-time-ago';
@@ -20,12 +19,8 @@ export interface DateTime1Node {
   time: TimeNode;
 }
 
-function getDateTime11(ast: AST | Token): DateTime1Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-time-1-1'
-  ) {
+function getDateTime11(ast: AST): DateTime1Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-time-1-1') {
     // [month, whitespace, time]
     const month = getMonthPart(ast.children[0]);
     const time = getTime(ast.children[2]);
@@ -40,12 +35,8 @@ function getDateTime11(ast: AST | Token): DateTime1Node | undefined {
   return undefined;
 }
 
-function getDateTime12(ast: AST | Token): DateTime1Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-time-1-2'
-  ) {
+function getDateTime12(ast: AST): DateTime1Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-time-1-2') {
     // [time, whitespace, month]
     const month = getMonthPart(ast.children[2]);
     const time = getTime(ast.children[0]);
@@ -66,12 +57,8 @@ export interface DateTime2Node {
   time: TimeNode;
 }
 
-function getDateTime21(ast: AST | Token): DateTime2Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-time-2-1'
-  ) {
+function getDateTime21(ast: AST): DateTime2Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-time-2-1') {
     // [date, whitespace, time]
     const date = getDate(ast.children[0]);
     const time = getTime(ast.children[2]);
@@ -86,12 +73,8 @@ function getDateTime21(ast: AST | Token): DateTime2Node | undefined {
   return undefined;
 }
 
-function getDateTime22(ast: AST | Token): DateTime2Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'date-time-2-2'
-  ) {
+function getDateTime22(ast: AST): DateTime2Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-time-2-2') {
     // [time, whitespace, date]
     const date = getDate(ast.children[2]);
     const time = getTime(ast.children[0]);
@@ -114,12 +97,12 @@ export interface DateTimeNode {
     | DateTimeAgoNode
     | InDateTimeNode
     | RelationalDateTimeNode
-    | IndependentDateTimeNode
-    | Token;
+    | IndependentDateTimeNode;
+  // | ValueAST;
 }
 
-export function getDateTime(ast: AST | Token): DateTimeNode | undefined {
-  if (ast.type === 'ast' && ast.kind === 'solo' && ast.tag === 'date-time') {
+export function getDateTime(ast: AST): DateTimeNode | undefined {
+  if (ast.kind === 'solo' && ast.tag === 'date-time') {
     const result =
       getDateTime11(ast.children) ||
       getDateTime12(ast.children) ||
@@ -134,13 +117,6 @@ export function getDateTime(ast: AST | Token): DateTimeNode | undefined {
       return {
         type: 'date-time',
         value: result,
-      };
-    }
-
-    if (ast.children.type === 'token') {
-      return {
-        type: 'date-time',
-        value: ast.children,
       };
     }
   }

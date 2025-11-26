@@ -1,26 +1,45 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
+import type { AST, ValueAST } from '../../core/token';
 import { getMinutesPart, type MinutesPartNode } from './minutes-part';
 
-export interface Hour12FormatNode {
-  type: 'hour-12';
-  hours: Token;
-  minutes: MinutesPartNode | undefined;
-  meridiem: Token;
+export interface MeridiemNode {
+  type: 'meridiem';
+  value: ValueAST;
 }
 
-export function getHour12(ast: AST | Token): Hour12FormatNode | undefined {
-  if (ast.type === 'ast' && ast.kind === 'multi' && ast.tag === 'hour-12') {
-    const [hours, minutesPart, /* whitespace */ , meridiem] = ast.children;
-    if (hours.type === 'ast' || meridiem.type === 'ast') {
-      return undefined;
-    }
+function getMeridiem(ast: AST): MeridiemNode | undefined {
+  if (
+    ast.kind === 'solo' &&
+    ast.tag === 'meridiem' &&
+    ast.children.kind === 'value'
+  ) {
     return {
-      type: 'hour-12',
-      hours,
-      minutes: getMinutesPart(minutesPart),
-      meridiem: meridiem,
+      type: 'meridiem',
+      value: ast.children,
     };
+  }
+  return undefined;
+}
+
+export interface Hour12FormatNode {
+  type: 'hour-12-clock';
+  hours: ValueAST;
+  minutes: MinutesPartNode | undefined;
+  meridiem: MeridiemNode;
+}
+
+export function getHour12(ast: AST): Hour12FormatNode | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'hour-12-clock') {
+    // hours minutes-part whitespace meridiem
+    const hours = ast.children[0];
+    const meridiem = getMeridiem(ast.children[3]);
+    if (hours.kind === 'value' && meridiem) {
+      return {
+        type: 'hour-12-clock',
+        hours,
+        minutes: getMinutesPart(ast.children[1]),
+        meridiem: meridiem,
+      };
+    }
   }
   return undefined;
 }

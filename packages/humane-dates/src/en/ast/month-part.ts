@@ -1,7 +1,6 @@
-import type { Token } from '../../core/matcher';
 import type { AST } from '../../core/token';
 import { type DayPart, getDayPart } from './day-part';
-import { getMonths, type MonthsNode } from './months';
+import { getMonths, type MonthsNode } from './keywords';
 
 export interface MonthPart1Node {
   type: 'month-part-1';
@@ -9,12 +8,8 @@ export interface MonthPart1Node {
   day: DayPart;
 }
 
-function getMonthPart1(ast: AST | Token): MonthPart1Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'month-part-1'
-  ) {
+function getMonthPart1(ast: AST): MonthPart1Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'month-part-1') {
     // month whitespace day
     const month = getMonths(ast.children[0]);
     const day = getDayPart(ast.children[2]);
@@ -35,12 +30,8 @@ export interface MonthPart2Node {
   day: DayPart;
 }
 
-function getMonthPart2(ast: AST | Token): MonthPart2Node | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'month-part-2'
-  ) {
+function getMonthPart2(ast: AST): MonthPart2Node | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'month-part-2') {
     // day whitespace month
     const month = getMonths(ast.children[2]);
     const day = getDayPart(ast.children[0]);
@@ -60,8 +51,8 @@ export interface MonthPartNode {
   value: MonthPart1Node | MonthPart2Node | MonthsNode;
 }
 
-export function getMonthPart(ast: AST | Token): MonthPartNode | undefined {
-  if (ast.type === 'ast' && ast.kind === 'solo' && ast.tag === 'month-part') {
+export function getMonthPart(ast: AST): MonthPartNode | undefined {
+  if (ast.kind === 'solo' && ast.tag === 'month-part') {
     const value =
       getMonthPart1(ast.children) ||
       getMonthPart2(ast.children) ||

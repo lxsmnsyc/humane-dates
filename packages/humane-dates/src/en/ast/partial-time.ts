@@ -1,29 +1,32 @@
-import type { Token } from '../../core/matcher';
 import type { AST } from '../../core/token';
-import { getTimeUnit, type TimeUnitNode } from './time-unit';
+import {
+  type CompleteTimeNode,
+  getCompleteTime,
+  getPartialComplete,
+  getTimeUnit,
+  type PartialCompleteNode,
+  type TimeUnitNode,
+} from './keywords';
 
 export interface PartialTimeNode {
   type: 'partial-time';
-  partialComplete: Token;
-  timeUnit: TimeUnitNode;
+  relation: PartialCompleteNode;
+  value: TimeUnitNode | CompleteTimeNode | PartialTimeNode;
 }
 
-export function getPartialTime(ast: AST | Token): PartialTimeNode | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'multi' &&
-    ast.tag === 'partial-time'
-  ) {
-    const [partialComplete, /* whitespace */ , timeUnit] = ast.children;
-    if (partialComplete.type === 'ast') {
-      return undefined;
-    }
-    const result = getTimeUnit(timeUnit);
-    if (result) {
+export function getPartialTime(ast: AST): PartialTimeNode | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'partial-time') {
+    // [partialComplete, /* whitespace */ , target]
+    const relation = getPartialComplete(ast.children[0]);
+    const result =
+      getTimeUnit(ast.children[2]) ||
+      getCompleteTime(ast.children[2]) ||
+      getPartialTime(ast.children[2]);
+    if (result && relation) {
       return {
         type: 'partial-time',
-        partialComplete,
-        timeUnit: result,
+        relation,
+        value: result,
       };
     }
   }

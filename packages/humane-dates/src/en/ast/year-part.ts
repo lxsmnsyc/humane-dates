@@ -1,17 +1,15 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
+import type { AST, ValueAST } from '../../core/token';
 
 export interface YearPartNode {
   type: 'year-part';
-  value: Token;
+  value: ValueAST;
 }
 
-export function getYearPart(ast: AST | Token): YearPartNode | undefined {
+export function getYearPart(ast: AST): YearPartNode | undefined {
   if (
-    ast.type === 'ast' &&
     ast.kind === 'solo' &&
     ast.tag === 'year-part' &&
-    ast.children.type === 'token'
+    ast.children.kind === 'value'
   ) {
     return {
       type: 'year-part',

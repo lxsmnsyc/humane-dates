@@ -1,33 +1,25 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
+import type { AST, ValueAST } from '../../core/token';
 import { extractMaybe } from './base';
 import { getSecondsPart, type SecondsPartNode } from './seconds-part';
 
 export interface MinutesPartNode {
   type: 'minutes-part';
-  minutes: Token;
+  minutes: ValueAST;
   seconds: SecondsPartNode | undefined;
 }
 
-export function getMinutesPart(ast: AST | Token): MinutesPartNode | undefined {
+export function getMinutesPart(ast: AST): MinutesPartNode | undefined {
   const current = extractMaybe(ast);
-  if (
-    current &&
-    current.type === 'ast' &&
-    current.kind === 'multi' &&
-    current.tag === 'minutes-part'
-  ) {
+  if (current && current.kind === 'multi' && current.tag === 'minutes-part') {
     // whitespace colon whitespace minutes secondsPart
     const minutes = current.children[3];
-    const secondsPart = current.children[4];
-    if (minutes.type === 'ast') {
-      return undefined;
+    if (minutes.kind === 'value') {
+      return {
+        type: 'minutes-part',
+        minutes,
+        seconds: getSecondsPart(current.children[4]),
+      };
     }
-    return {
-      type: 'minutes-part',
-      minutes,
-      seconds: getSecondsPart(secondsPart),
-    };
   }
   return undefined;
 }

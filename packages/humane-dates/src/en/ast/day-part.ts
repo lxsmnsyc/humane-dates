@@ -1,14 +1,13 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
+import type { AST, ValueAST } from '../../core/token';
 import { getOrdinalNumber, type OrdinalNumberNode } from './ordinal-number';
 
 export interface DayPart {
   type: 'day-part';
-  value: OrdinalNumberNode | Token;
+  value: OrdinalNumberNode | ValueAST;
 }
 
-export function getDayPart(ast: AST | Token): DayPart | undefined {
-  if (ast.type === 'ast' && ast.kind === 'solo' && ast.tag === 'day-part') {
+export function getDayPart(ast: AST): DayPart | undefined {
+  if (ast.kind === 'solo' && ast.tag === 'day-part') {
     const result = getOrdinalNumber(ast.children);
     if (result) {
       return {
@@ -16,7 +15,7 @@ export function getDayPart(ast: AST | Token): DayPart | undefined {
         value: result,
       };
     }
-    if (ast.children.type === 'token') {
+    if (ast.children.kind === 'value') {
       return {
         type: 'day-part',
         value: ast.children,

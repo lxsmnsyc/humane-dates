@@ -6,7 +6,6 @@ export interface ASTPosition {
 }
 
 export interface Token {
-  type: 'token';
   tag: string;
   value: string;
   start: number;
@@ -24,7 +23,6 @@ export function pattern(tag: string, value: string, flags?: string): Matcher {
       const { cursor } = feed;
       if (result != null && eatFeed(feed, result[0])) {
         return {
-          type: 'token',
           tag,
           value: result[0],
           start: cursor,

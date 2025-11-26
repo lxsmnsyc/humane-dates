@@ -1,6 +1,7 @@
 import type { Token } from '../core/matcher';
 import {
   type AST,
+  type ASTMatcher,
   alternation,
   createTokenFeed,
   either,
@@ -11,63 +12,98 @@ import {
   tag,
 } from '../core/token';
 
-const WHITESPACE = tag('whitespace');
+const WHITESPACE = tag('whitespace', 'whitespace');
 const OPT_WHITESPACE = optional(WHITESPACE);
 
-const NUMBER = tag('number');
-const ORDINAL = regex('ident', /^(st|nd|rd|th)$/i);
-const SINGULAR = regex('ident', /^an?$/i);
+const NUMBER = tag('number', 'number');
+const ORDINAL = regex('ordinal', 'ident', /^(st|nd|rd|th)$/i);
+const SINGULAR = regex('singular', 'ident', /^an?$/i);
 
-const SECONDS = regex('number', /^[0-5]?[0-9]$/);
-const MINUTES = regex('number', /^[0-5]?[0-9]$/);
-const HOUR_12 = regex('number', /^(0?[1-9])|(2[0-3])$/);
-const HOUR_24 = regex('number', /^([0-1]?[1-9])|(2[0-3])$/);
+const SECONDS = regex('seconds', 'number', /^[0-5]?[0-9]$/);
+const MINUTES = regex('minutes', 'number', /^[0-5]?[0-9]$/);
+const HOUR_12 = regex('hour-12', 'number', /^(0?[1-9])|(2[0-3])$/);
+const HOUR_24 = regex('hour-24', 'number', /^([0-1]?[1-9])|(2[0-3])$/);
 
 // Symbols
-const COLON = literal('op', ':');
+const COLON = literal('colon', 'op', ':');
 
 // Keywords
-const AGO = regex('ident', /^ago$/i);
-const ON = regex('ident', /^on$/i);
-const IN = regex('ident', /^in$/i);
-const AT = regex('ident', /^at$/i);
+const AGO = regex('ago', 'ident', /^ago$/i);
+const ON = regex('on', 'ident', /^on$/i);
+const IN = regex('in', 'ident', /^in$/i);
+const AT = regex('at', 'ident', /^at$/i);
 // const OF = regex('ident', /^of$/i);
-const YEAR = regex('ident', /^year$/i);
+const YEAR = regex('year', 'ident', /^year$/i);
 
-const MERIDIEM = regex('ident', /^(a|p)\.?m\.?/i);
+const MERIDIEM = alternation('meridiem', [
+  regex('meridiem-am', 'ident', /^a\.?m\.?/i),
+  regex('meridiem-pm', 'ident', /^p\.?m\.?$/i),
+]);
+
 const TIME_UNIT = alternation('time-unit', [
-  regex('ident', /^hours?|minutes?|seconds?$/i),
-  regex('ident', /^(hrs?|mins?|secs?)\.?$/i),
+  regex('hours-unit', 'ident', /^(hours?|hrs?\.?)$/i),
+  regex('minutes-unit', 'ident', /^(minutes?|mins?\.?)$/i),
+  regex('seconds-unit', 'ident', /^(seconds?|secs?\.?)$/i),
 ]);
+
 const DATE_UNIT = alternation('date-unit', [
-  regex('ident', /^days?|weeks?|months?|years?$/i),
-  regex('ident', /^(wks?|mos?|yrs?)\.?$/i),
+  regex('days-unit', 'ident', /^(days?)$/i),
+  regex('weeks-unit', 'ident', /^(weeks?|wks?\.?)$/i),
+  regex('months-unit', 'ident', /^(months?|mos?\.?)$/i),
+  regex('years-unit', 'ident', /^(years?|yrs?\.?)$/i),
 ]);
 
-const COMPLETE = regex('ident', /^(now)$/i);
-const COMPLETE_TIME = regex('ident', /^(midnight)$/i);
-const COMPLETE_DATE = regex('ident', /^(tomorrow|today|yesterday)$/i);
+const COMPLETE = alternation('complete', [regex('now', 'ident', /^(now)$/i)]);
 
-const PARTIAL_RELATIONAL = regex('ident', /^(before|after|until|from|past)$/i);
-const PARTIAL_COMPLETE = regex('ident', /^(last|next|this)$/i);
+const COMPLETE_TIME = alternation('complete-time', [
+  regex('midnight', 'ident', /^midnight$/i),
+  regex('noon', 'ident', /^noon$/i),
+]);
+const COMPLETE_DATE = alternation('complete-date', [
+  regex('tomorrow', 'ident', /^tomorrow$/i),
+  regex('today', 'ident', /^today$/i),
+  regex('yesterday', 'ident', /^yesterday$/i),
+]);
+
+const PARTIAL_RELATIONAL = alternation('partial-relation', [
+  regex('before', 'ident', /^before$/i),
+  regex('after', 'ident', /^(after|from|past)$/i),
+]);
+
+const PARTIAL_COMPLETE = alternation('partial-complete', [
+  regex('last', 'ident', /^last$/i),
+  regex('next', 'ident', /^next$/i),
+  regex('this', 'ident', /^this$/i),
+]);
 
 // const ORDER = regex('ident', /^(start|end|first|last)$/i);
 
 const MONTHS = alternation('months', [
-  regex(
-    'ident',
-    /^(january|february|march|april|may|june|july|august|september|october|november|december)$/i,
-  ),
-  regex('ident', /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\.?$/i),
+  regex('jan', 'ident', /^jan(uary|\.?)$/i),
+  regex('feb', 'ident', /^feb(ruary|\.?)$/i),
+  regex('mar', 'ident', /^mar(ch|\.?)$/i),
+  regex('apr', 'ident', /^apr(il|\.?)$/i),
+  regex('may', 'ident', /^may$/i),
+  regex('jun', 'ident', /^jun(e|\.?)$/i),
+  regex('jul', 'ident', /^jul(y|\.?)$/i),
+  regex('aug', 'ident', /^aug(ust|\.?)$/i),
+  regex('sep', 'ident', /^sep(tember|\.?)$/i),
+  regex('oct', 'ident', /^oct(tober|\.?)$/i),
+  regex('nov', 'ident', /^nov(ember|\.?)$/i),
+  regex('dec', 'ident', /^dec(ember|\.?)$/i),
 ]);
+
 const DAYS = alternation('days', [
-  regex(
-    'ident',
-    /^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i,
-  ),
-  regex('ident', /^(sun|mon|tue|wed|thu|fri|sat)\.?$/i),
+  regex('sun', 'ident', /^sun(day|\.?)$/i),
+  regex('mon', 'ident', /^mon(day|\.?)$/i),
+  regex('tue', 'ident', /^tue(sday|\.?)$/i),
+  regex('wed', 'ident', /^wed(nesday|\.?)$/i),
+  regex('thu', 'ident', /^thu(rsday|\.?)$/i),
+  regex('fri', 'ident', /^fri(day|\.?)$/i),
+  regex('sat', 'ident', /^sat(urday|\.?)$/i),
 ]);
-const YEARS = regex('number', /^[1-9][0-9][0-9][0-9]+$/i);
+
+const YEARS = regex('years', 'number', /^[1-9][0-9][0-9][0-9]+$/i);
 
 const ORDINAL_NUMBER = sequence('ordinal-number', [NUMBER, ORDINAL]);
 
@@ -119,16 +155,14 @@ const MINUTES_PART = sequence('minutes-part', [
 
 const FULL_TIME = alternation('full-time', [
   // Match 12-hour clock
-  sequence('hour-12', [
+  sequence('hour-12-clock', [
     HOUR_12,
     optional(MINUTES_PART),
     OPT_WHITESPACE,
     MERIDIEM,
   ]),
   // Match 24-hour clock
-  sequence('hour-24', [HOUR_24, MINUTES_PART]),
-  // Match partial complete
-  sequence('partial-time', [PARTIAL_COMPLETE, WHITESPACE, TIME_UNIT]),
+  sequence('hour-24-clock', [HOUR_24, MINUTES_PART]),
   // Match complete,
   COMPLETE_TIME,
 ]);
@@ -146,25 +180,34 @@ const SPECIFIC_DATE = alternation('specific-date', [
   sequence('date-format-3', [YEAR_PART, WHITESPACE, MONTH_PART]),
 ]);
 
+const RECURSIVE_PARTIAL_DATE: ASTMatcher = feed => PARTIAL_DATE(feed);
+
+const PARTIAL_DATE = sequence('partial-date', [
+  PARTIAL_COMPLETE,
+  WHITESPACE,
+  either(
+    // Next January 1
+    MONTH_PART,
+    // Next week/month
+    DATE_UNIT,
+    // Next Sunday
+    DAYS,
+    // Recurse
+    RECURSIVE_PARTIAL_DATE,
+  ),
+]);
+
+const RECURSIVE_PARTIAL_TIME: ASTMatcher = feed => PARTIAL_TIME(feed);
+
+const PARTIAL_TIME = sequence('partial-time', [
+  PARTIAL_COMPLETE,
+  WHITESPACE,
+  either(FULL_TIME, RECURSIVE_PARTIAL_TIME, TIME_UNIT),
+]);
+
 const FULL_DATE = alternation('full-date', [
   SPECIFIC_DATE,
-  // Match partial complete
-  sequence('partial-date', [
-    PARTIAL_COMPLETE,
-    WHITESPACE,
-    alternation('partial-date-target', [
-      // Next January 1
-      MONTH_PART,
-      // Next week/month
-      DATE_UNIT,
-      // Next Sunday
-      DAYS,
-      // Next January
-      MONTHS,
-      // Next midnight
-      COMPLETE_TIME,
-    ]),
-  ]),
+  PARTIAL_DATE,
   // Months
   MONTH_PART,
   // Match complete,
@@ -180,12 +223,14 @@ const DATE = alternation('date', [FULL_DATE, RELATIONAL_DATE]);
 const INDEPENDENT_DATETIME = alternation('independent-date-time', [
   DATE,
   TIME,
+  PARTIAL_TIME,
   COMPLETE,
 ]);
 
 const INDEPENDENT_FULL = alternation('independent-full-date-time', [
   FULL_TIME,
   FULL_DATE,
+  PARTIAL_TIME,
   COMPLETE,
 ]);
 
@@ -221,8 +266,8 @@ const DATE_TIME = alternation('date-time', [
   INDEPENDENT_DATETIME,
 ]);
 
-export function parseDateTime(token: Token[]): (AST | Token)[] {
-  const results: (AST | Token)[] = [];
+export function parseDateTime(token: Token[]): AST[] {
+  const results: AST[] = [];
 
   const feed = createTokenFeed(token);
   while (feed.cursor < feed.size) {

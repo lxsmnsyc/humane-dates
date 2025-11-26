@@ -14,34 +14,32 @@ export function createTokenFeed(source: Token[]): TokenFeed {
   };
 }
 
-export interface BaseAST {
-  type: 'ast';
-  tag: string;
-}
-
 export interface SingleAST {
-  type: 'ast';
   tag: string;
   kind: 'solo';
-  children: AST | Token;
+  children: AST;
 }
 
 export interface MultiAST {
-  type: 'ast';
   tag: string;
   kind: 'multi';
-  children: (AST | Token)[];
+  children: AST[];
 }
 
 export interface MaybeAST {
-  type: 'ast';
   kind: 'maybe';
-  children?: AST | Token;
+  children?: AST;
 }
 
-export type AST = SingleAST | MultiAST | MaybeAST;
+export interface ValueAST {
+  kind: 'value';
+  tag: string;
+  children: string;
+}
 
-export type ASTMatcher = (feed: TokenFeed) => AST | Token | undefined;
+export type AST = SingleAST | MultiAST | MaybeAST | ValueAST;
+
+export type ASTMatcher = (feed: TokenFeed) => AST | undefined;
 
 export function either<T extends ASTMatcher[]>(...args: T): ASTMatcher {
   return (feed: TokenFeed) => {
@@ -66,7 +64,6 @@ export function alternation<T extends ASTMatcher[]>(
 
       if (result) {
         return {
-          type: 'ast',
           tag,
           kind: 'solo',
           children: result,
@@ -82,7 +79,7 @@ export function sequence<T extends ASTMatcher[]>(
   grammar: T,
 ): ASTMatcher {
   return (feed: TokenFeed): AST | undefined => {
-    const results: (Token | AST)[] = [];
+    const results: AST[] = [];
     const { cursor } = feed;
     for (let i = 0, len = grammar.length; i < len; i += 1) {
       const result = grammar[i](feed);
@@ -95,7 +92,6 @@ export function sequence<T extends ASTMatcher[]>(
       }
     }
     return {
-      type: 'ast',
       tag,
       kind: 'multi',
       children: results,
@@ -107,34 +103,48 @@ export function optional<T extends ASTMatcher>(grammar: T): ASTMatcher {
   return (feed: TokenFeed): AST => {
     const result = grammar(feed);
     return {
-      type: 'ast',
       kind: 'maybe',
       children: result ?? undefined,
     };
   };
 }
 
-export function match(filter: (token: Token) => boolean): ASTMatcher {
+export function match(
+  tag: string,
+  filter: (token: Token) => boolean,
+): ASTMatcher {
   return (feed: TokenFeed) => {
     if (feed.cursor < feed.size) {
       const current = feed.source[feed.cursor];
       if (filter(current)) {
         feed.cursor++;
-        return current;
+        return {
+          tag,
+          kind: 'value',
+          children: current.value,
+        };
       }
     }
     return undefined;
   };
 }
 
-export function tag(tag: string): ASTMatcher {
-  return match(token => token.tag === tag);
+export function tag(tag: string, target: string): ASTMatcher {
+  return match(tag, token => token.tag === target);
 }
 
-export function literal(tag: string, value: string): ASTMatcher {
-  return match(token => token.tag === tag && token.value === value);
+export function literal(
+  tag: string,
+  target: string,
+  value: string,
+): ASTMatcher {
+  return match(tag, token => token.tag === target && token.value === value);
 }
 
-export function regex(tag: string, pattern: RegExp): ASTMatcher {
-  return match(token => token.tag === tag && pattern.test(token.value));
+export function regex(
+  tag: string,
+  target: string,
+  pattern: RegExp,
+): ASTMatcher {
+  return match(tag, token => token.tag === target && pattern.test(token.value));
 }

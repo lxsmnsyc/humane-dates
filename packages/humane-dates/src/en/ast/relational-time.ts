@@ -1,4 +1,3 @@
-import type { Token } from '../../core/matcher';
 import type { AST } from '../../core/token';
 import { type AtTimeNode, getAtTime } from './at-time';
 
@@ -7,14 +6,8 @@ export interface RelationalTimeNode {
   value: AtTimeNode;
 }
 
-export function getRelationalTime(
-  ast: AST | Token,
-): RelationalTimeNode | undefined {
-  if (
-    ast.type === 'ast' &&
-    ast.kind === 'solo' &&
-    ast.tag === 'relational-time'
-  ) {
+export function getRelationalTime(ast: AST): RelationalTimeNode | undefined {
+  if (ast.kind === 'solo' && ast.tag === 'relational-time') {
     const value = getAtTime(ast.children);
     if (value) {
       return {

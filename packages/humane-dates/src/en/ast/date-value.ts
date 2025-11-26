@@ -1,19 +1,17 @@
-import type { Token } from '../../core/matcher';
-import type { AST } from '../../core/token';
-import { type DateUnitNode, getDateUnit } from './date-unit';
+import type { AST, ValueAST } from '../../core/token';
 
 export interface DateValueNode {
   type: 'date-value';
-  value: Token;
-  unit: DateUnitNode;
+  value: ValueAST;
+  unit: ValueAST;
 }
 
-export function getDateValue(ast: AST | Token): DateValueNode | undefined {
-  if (ast.type === 'ast' && ast.kind === 'multi' && ast.tag === 'date-value') {
+export function getDateValue(ast: AST): DateValueNode | undefined {
+  if (ast.kind === 'multi' && ast.tag === 'date-value') {
     // number/singular whitespace unit
     const value = ast.children[0];
-    const unit = getDateUnit(ast.children[2]);
-    if (unit && value.type === 'token') {
+    const unit = ast.children[2];
+    if (unit.kind === 'value' && value.kind === 'value') {
       return {
         type: 'date-value',
         value,
