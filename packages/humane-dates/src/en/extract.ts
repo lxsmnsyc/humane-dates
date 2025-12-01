@@ -1,13 +1,72 @@
-import type { ValueAST } from '../core/token';
-import type { DateTimeNode } from './ast/date-time';
-import type { FullTimeNode } from './ast/full-time';
-import type { Hour12FormatNode, MeridiemNode } from './ast/hour-12';
-import type { Hour24FormatNode } from './ast/hour-24';
-import type { IndependentDateTimeNode } from './ast/independent-date-time';
-import type { MinutesPartNode } from './ast/minutes-part';
-import type { RelationalTimeNode } from './ast/relational-time';
-import type { SecondsPartNode } from './ast/seconds-part';
-import type { TimeNode } from './ast/time';
+import {
+  addDays,
+  addHours,
+  addMinutes,
+  addMonths,
+  addSeconds,
+  addWeeks,
+  addYears,
+  getISODay,
+  isBefore,
+  set,
+  subDays,
+} from 'date-fns';
+import type {
+  CompleteDateNode,
+  CompleteNode,
+  CompleteTimeNode,
+  DateFormatNode,
+  DateNode,
+  DateTimeAgoNode,
+  DateTimeNode,
+  DateTimeSequenceNode,
+  DateUnitNode,
+  DirectionalDateNode,
+  DirectionalTimeNode,
+  FullDateNode,
+  FullTimeNode,
+  Hour12ClockNode,
+  Hour24ClockNode,
+  InDateTimeNode,
+  IndependentDateTimeNode,
+  IndependentFullDateTimeNode,
+  MinutesPartNode,
+  MonthPartNode,
+  MonthsNode,
+  RelativeDateNode,
+  RelativeDateTimeNode,
+  RelativeDayNode,
+  RelativeMonthNode,
+  SpecificDateNode,
+  SpecificTimeNode,
+  TimeNode,
+  TimeUnitNode,
+} from './parser';
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
+const DAY_INDEX: Record<string, number> = {
+  sun: 1,
+  mon: 2,
+  tue: 3,
+  wed: 4,
+  thu: 5,
+  fri: 6,
+  sat: 7,
+};
 
 export interface ExtractedHumaneDate {
   date: Date;
@@ -21,13 +80,6 @@ export interface ExtractedHumaneDate {
     minutes: boolean;
     seconds: boolean;
   };
-}
-
-interface ExtractContext {
-  info: ExtractedHumaneDate;
-
-  // last/this/next, where last = -1, next = +1
-  direction: number;
 }
 
 function createExtractedHumaneDate(referenceDate: Date): ExtractedHumaneDate {
@@ -48,128 +100,451 @@ function createExtractedHumaneDate(referenceDate: Date): ExtractedHumaneDate {
   };
 }
 
-function extractSecondsPart(ctx: ExtractContext, node: SecondsPartNode): void {
-  const value = Number.parseInt(node.value.children, 10);
-  ctx.info.date.setSeconds(value, 0);
-  ctx.info.specified.seconds = true;
-}
-
-function extractMinutesPart(ctx: ExtractContext, node: MinutesPartNode): void {
-  const value = Number.parseInt(node.minutes.children, 10);
-  ctx.info.date.setMinutes(value);
-  ctx.info.specified.minutes = true;
-
-  if (node.seconds) {
-    extractSecondsPart(ctx, node.seconds);
-  } else {
-    ctx.info.date.setSeconds(0, 0);
+function add(
+  state: ExtractedHumaneDate,
+  field: DateUnitNode['value'] | TimeUnitNode['value'],
+  offset: number,
+): void {
+  if (offset === 0) {
+    return;
   }
-}
-
-function extractHour12(ctx: ExtractContext, node: ValueAST): void {
-  const value = Number.parseInt(node.children, 10);
-  ctx.info.date.setHours(value);
-  ctx.info.specified.hours = true;
-}
-
-function extractMeridiem(ctx: ExtractContext, node: MeridiemNode): void {
-  if (node.value.tag === 'meridiem-pm') {
-    ctx.info.date.setHours(ctx.info.date.getHours() + 12);
-  }
-}
-
-function extractHour12Clock(ctx: ExtractContext, node: Hour12FormatNode): void {
-  extractHour12(ctx, node.hours);
-  if (node.minutes) {
-    extractMinutesPart(ctx, node.minutes);
-  } else {
-    ctx.info.date.setMinutes(0);
-  }
-  extractMeridiem(ctx, node.meridiem);
-}
-
-function extractHour24Clock(ctx: ExtractContext, node: Hour24FormatNode): void {
-  extractHour12(ctx, node.hours);
-  extractMinutesPart(ctx, node.minutes);
-}
-
-function extractFullTime(ctx: ExtractContext, node: FullTimeNode): void {
-  switch (node.value.type) {
-    case 'hour-12-clock':
-      extractHour12Clock(ctx, node.value);
+  switch (field) {
+    case 'seconds':
+      state.date = addSeconds(state.date, offset);
       break;
-    case 'hour-24-clock':
-      extractHour24Clock(ctx, node.value);
+    case 'minutes':
+      state.date = addMinutes(state.date, offset);
       break;
-    case 'complete-time':
-      switch (node.value.value.tag) {
-        case 'midnight':
-          ctx.info.date.setHours(23, 59, 59);
-          break;
-        case 'noon':
-          ctx.info.date.setHours(0, 0, 0);
-          break;
-      }
-      ctx.info.specified.hours = true;
-      ctx.info.specified.minutes = true;
-      ctx.info.specified.seconds = true;
+    case 'hours':
+      state.date = addHours(state.date, offset);
+      break;
+    case 'days':
+      state.date = addDays(state.date, offset);
+      break;
+    case 'weeks':
+      state.date = addWeeks(state.date, offset);
+      break;
+    case 'months':
+      state.date = addMonths(state.date, offset);
+      break;
+    case 'years':
+      state.date = addYears(state.date, offset);
       break;
   }
 }
 
-function extractRelationalTime(
-  ctx: ExtractContext,
-  node: RelationalTimeNode,
+function setDateSpecified(state: ExtractedHumaneDate): void {
+  state.specified.day = true;
+  state.specified.month = true;
+  state.specified.year = true;
+}
+
+function extractCompleteDate(
+  state: ExtractedHumaneDate,
+  node: CompleteDateNode,
+): void {
+  switch (node.value) {
+    case 'today':
+      break;
+    case 'tomorrow':
+      add(state, 'days', 1);
+      break;
+    case 'yesterday':
+      add(state, 'days', -1);
+      break;
+  }
+  setDateSpecified(state);
+}
+
+function extractMonths(node: MonthsNode): number {
+  return MONTH_INDEX[node.value];
+}
+
+function extractMonthPart(node: MonthPartNode): {
+  month: number;
+  day?: number;
+} {
+  if (node.value.type === 'month-day') {
+    return {
+      month: extractMonths(node.value.month),
+      day: node.value.day.value,
+    };
+  }
+  return {
+    month: extractMonths(node.value),
+  };
+}
+
+function extractDirectionalDate(
+  state: ExtractedHumaneDate,
+  node: DirectionalDateNode,
 ): void {
   switch (node.value.type) {
-    case 'at-time':
-      extractFullTime(ctx, node.value.value);
+    case 'date-unit':
+      add(state, node.value.value, node.offset);
+      setDateSpecified(state);
+      break;
+    case 'days': {
+      const targetISODay = DAY_INDEX[node.value.value];
+      const currentISODay = getISODay(state.date);
+      let offset = node.offset;
+      if (offset < 0) {
+        // Refer "last" as "this"
+        if (targetISODay < currentISODay) {
+          offset += 1;
+        }
+      }
+      // Back track to Sunday
+      const lastSunday = subDays(state.date, currentISODay - 1);
+      // offset week
+      const offsetWeek = addWeeks(lastSunday, offset);
+      // adjust days again
+      state.date = addDays(offsetWeek, targetISODay - 1);
+      setDateSpecified(state);
+      break;
+    }
+    case 'month-part': {
+      const monthPart = extractMonthPart(node.value);
+      // Create a dummy date
+      let base = new Date(
+        state.date.getFullYear(),
+        monthPart.month,
+        monthPart.day,
+      );
+      let offset = node.offset;
+      if (offset < 0) {
+        // Check first if dummy date is "past" from the current date
+        if (isBefore(state.date, base)) {
+          // If it's before, decrease offset by 1
+          offset += 1;
+        }
+      }
+      base = addYears(base, offset);
+      state.specified.year = true;
+      state.specified.month = true;
+      if (monthPart.day != null) {
+        state.specified.day = true;
+      }
+      break;
+    }
+  }
+}
+
+function extractRelativeDay(
+  state: ExtractedHumaneDate,
+  node: RelativeDayNode,
+): void {
+  const targetISODay = DAY_INDEX[node.days.value];
+  const currentISODay = getISODay(state.date);
+
+  // Back track to Sunday
+  const lastSunday = subDays(state.date, currentISODay - 1);
+  // offset week
+  const offsetWeek = addWeeks(lastSunday, node.offset);
+  // adjust days again
+  state.date = addDays(offsetWeek, targetISODay - 1);
+}
+
+function extractRelativeMonth(
+  state: ExtractedHumaneDate,
+  node: RelativeMonthNode,
+): void {
+  const monthPart = extractMonthPart(node.month);
+  state.date = addYears(set(state.date, monthPart), node.offset);
+}
+
+function extractRelativeDate(
+  state: ExtractedHumaneDate,
+  node: RelativeDateNode,
+): void {
+  switch (node.value.type) {
+    case 'relative-day':
+      extractRelativeDay(state, node.value);
+      break;
+    case 'relative-month':
+      extractRelativeMonth(state, node.value);
+      break;
+  }
+  setDateSpecified(state);
+}
+
+function extractDateFormat(
+  state: ExtractedHumaneDate,
+  node: DateFormatNode,
+): void {
+  const monthPart = extractMonthPart(node.month);
+  if (typeof node.year.value === 'number') {
+    state.date.setFullYear(node.year.value);
+  } else {
+    state.date = addYears(state.date, node.year.value.value);
+  }
+  state.date = set(state.date, monthPart);
+  setDateSpecified(state);
+}
+
+function extractSpecificDate(
+  state: ExtractedHumaneDate,
+  node: SpecificDateNode,
+): void {
+  extractDateFormat(state, node.value);
+}
+
+function extractFullDate(state: ExtractedHumaneDate, node: FullDateNode): void {
+  switch (node.value.type) {
+    case 'complete-date':
+      extractCompleteDate(state, node.value);
+      break;
+    case 'directional-date':
+      extractDirectionalDate(state, node.value);
+      break;
+    case 'month-part': {
+      state.date = set(state.date, extractMonthPart(node.value));
+      setDateSpecified(state);
+      break;
+    }
+    case 'relative-date':
+      extractRelativeDate(state, node.value);
+      break;
+    case 'specific-date':
+      extractSpecificDate(state, node.value);
       break;
   }
 }
 
-function extractTime(ctx: ExtractContext, node: TimeNode): void {
-  switch (node.value.type) {
-    case 'full-time':
-      extractFullTime(ctx, node.value);
+function extractDate(state: ExtractedHumaneDate, node: DateNode): void {
+  extractFullDate(state, node.value);
+}
+
+function setTimeSpecified(state: ExtractedHumaneDate): void {
+  state.specified.hours = true;
+  state.specified.minutes = true;
+  state.specified.seconds = true;
+}
+
+function extractCompleteTime(
+  state: ExtractedHumaneDate,
+  node: CompleteTimeNode,
+): void {
+  switch (node.value) {
+    case 'midnight':
+      state.date = set(state.date, {
+        hours: 23,
+        minutes: 59,
+        seconds: 0,
+      });
       break;
-    case 'relational-time':
-      extractRelationalTime(ctx, node.value);
+    case 'noon':
+      state.date = set(state.date, {
+        hours: 12,
+        minutes: 0,
+        seconds: 0,
+      });
+      break;
+  }
+  setTimeSpecified(state);
+}
+
+interface MinutesPart {
+  minutes: number;
+  seconds?: number;
+}
+
+function extractMinutesPart(node: MinutesPartNode): MinutesPart {
+  return {
+    minutes: node.minutes,
+    seconds: node.seconds ? node.seconds.value : undefined,
+  };
+}
+
+interface HoursPart {
+  hours: number;
+  minutes?: MinutesPart;
+}
+
+function extractHour12Clock(node: Hour12ClockNode): HoursPart {
+  return {
+    hours:
+      node.hours + (node.meridiem.value === 'pm' && node.hours < 12 ? 12 : 0),
+    minutes: node.minutes ? extractMinutesPart(node.minutes) : undefined,
+  };
+}
+
+function extractHour24Clock(node: Hour24ClockNode): HoursPart {
+  return {
+    hours: node.hours,
+    minutes: extractMinutesPart(node.minutes),
+  };
+}
+
+function extractSpecificTime(node: SpecificTimeNode): HoursPart {
+  return node.value.type === 'hour-12-clock'
+    ? extractHour12Clock(node.value)
+    : extractHour24Clock(node.value);
+}
+
+function extractFullTime(state: ExtractedHumaneDate, node: FullTimeNode): void {
+  switch (node.value.type) {
+    case 'complete-time':
+      extractCompleteTime(state, node.value);
+      break;
+    case 'specific-time': {
+      const extracted = extractSpecificTime(node.value);
+      const update = {
+        hours: extracted.hours,
+        minutes: 0,
+        seconds: 0,
+        milliseconds: 0,
+      };
+      state.specified.hours = true;
+      if (extracted.minutes) {
+        update.minutes = extracted.minutes.minutes;
+        state.specified.minutes = true;
+        if (extracted.minutes.seconds) {
+          update.seconds = extracted.minutes.seconds;
+          state.specified.seconds = true;
+        }
+      }
+      state.date = set(state.date, update);
+      break;
+    }
+  }
+}
+
+function extractTime(state: ExtractedHumaneDate, node: TimeNode): void {
+  extractFullTime(state, node.value);
+}
+
+function extractDateTimeSequence(
+  state: ExtractedHumaneDate,
+  node: DateTimeSequenceNode,
+): void {
+  extractTime(state, node.time);
+  extractDate(state, node.date);
+}
+
+function extractDateTimeAgo(
+  state: ExtractedHumaneDate,
+  node: DateTimeAgoNode,
+): void {
+  add(state, node.unit.value, -node.value);
+  setTimeSpecified(state);
+  setDateSpecified(state);
+}
+
+function extractInDateTime(
+  state: ExtractedHumaneDate,
+  node: InDateTimeNode,
+): void {
+  add(state, node.unit.value, node.value);
+  setTimeSpecified(state);
+  setDateSpecified(state);
+}
+
+function extractDirectionalTime(
+  state: ExtractedHumaneDate,
+  node: DirectionalTimeNode,
+): void {
+  if (node.value.type === 'full-time') {
+    const prevHours = state.date.getHours();
+
+    extractFullTime(state, node.value);
+
+    let offset = node.offset;
+    if (offset < 0) {
+      if (state.date.getHours() < prevHours) {
+        offset += 1;
+      }
+    }
+
+    state.date = addDays(state.date, offset);
+  } else {
+    add(state, node.value.value, node.offset);
+    setTimeSpecified(state);
+  }
+  setDateSpecified(state);
+}
+
+function extractComplete(state: ExtractedHumaneDate, node: CompleteNode): void {
+  switch (node.value) {
+    case 'now':
+      setDateSpecified(state);
+
       break;
   }
 }
 
 function extractIndependentDateTime(
-  ctx: ExtractContext,
+  state: ExtractedHumaneDate,
   node: IndependentDateTimeNode,
 ): void {
   switch (node.value.type) {
-    case 'time':
-      extractTime(ctx, node.value);
+    case 'complete':
+      extractComplete(state, node.value);
       break;
     case 'date':
+      extractDate(state, node.value);
+      break;
+    case 'directional-time':
+      extractDirectionalTime(state, node.value);
+      break;
+    case 'time':
+      extractTime(state, node.value);
       break;
   }
+}
+
+function extractIndependentFullDateTime(
+  state: ExtractedHumaneDate,
+  node: IndependentFullDateTimeNode,
+): void {
+  switch (node.value.type) {
+    case 'complete':
+      extractComplete(state, node.value);
+      break;
+    case 'directional-time':
+      extractDirectionalTime(state, node.value);
+      break;
+    case 'full-date':
+      extractFullDate(state, node.value);
+      break;
+    case 'full-time':
+      extractFullTime(state, node.value);
+      break;
+  }
+}
+
+function extractRelativeDateTime(
+  state: ExtractedHumaneDate,
+  node: RelativeDateTimeNode,
+): void {
+  const offset = node.value.value;
+  const unit = node.value.unit.value;
+  extractIndependentFullDateTime(state, node.target);
+
+  add(state, unit, node.relative.value === 'before' ? -offset : offset);
 }
 
 export function extract(
   node: DateTimeNode,
   referenceDate: Date,
 ): ExtractedHumaneDate {
-  const ctx = {
-    info: createExtractedHumaneDate(referenceDate),
-    direction: 0,
-  };
+  const state = createExtractedHumaneDate(referenceDate);
   switch (node.value.type) {
-    case 'independent-date-time':
-      extractIndependentDateTime(ctx, node.value);
-      break;
-    case 'date-time-1':
-    case 'date-time-2':
     case 'date-time-ago':
+      extractDateTimeAgo(state, node.value);
+      break;
+    case 'date-time-sequence':
+      extractDateTimeSequence(state, node.value);
+      break;
     case 'in-date-time':
-    case 'relational-date-time':
+      extractInDateTime(state, node.value);
+      break;
+    case 'independent-date-time':
+      extractIndependentDateTime(state, node.value);
+      break;
+    case 'relative-date-time':
+      extractRelativeDateTime(state, node.value);
       break;
   }
-  return ctx.info;
+  return state;
 }

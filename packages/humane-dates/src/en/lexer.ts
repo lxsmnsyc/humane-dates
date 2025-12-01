@@ -1,12 +1,12 @@
 import type { Token } from '../core/matcher';
 import {
   type AST,
-  type ASTMatcher,
   alternation,
   createTokenFeed,
   either,
   literal,
   optional,
+  quantifier,
   regex,
   sequence,
   tag,
@@ -46,11 +46,16 @@ const TIME_UNIT = alternation('time-unit', [
   regex('seconds-unit', 'ident', /^(seconds?|secs?\.?)$/i),
 ]);
 
+const DAYS_UNIT = regex('days-unit', 'ident', /^(days?)$/i);
+const WEEKS_UNIT = regex('weeks-unit', 'ident', /^(weeks?|wks?\.?)$/i);
+const MONTHS_UNIT = regex('months-unit', 'ident', /^(months?|mos?\.?)$/i);
+const YEARS_UNIT = regex('years-unit', 'ident', /^(years?|yrs?\.?)$/i);
+
 const DATE_UNIT = alternation('date-unit', [
-  regex('days-unit', 'ident', /^(days?)$/i),
-  regex('weeks-unit', 'ident', /^(weeks?|wks?\.?)$/i),
-  regex('months-unit', 'ident', /^(months?|mos?\.?)$/i),
-  regex('years-unit', 'ident', /^(years?|yrs?\.?)$/i),
+  DAYS_UNIT,
+  WEEKS_UNIT,
+  MONTHS_UNIT,
+  YEARS_UNIT,
 ]);
 
 const COMPLETE = alternation('complete', [regex('now', 'ident', /^(now)$/i)]);
@@ -65,12 +70,12 @@ const COMPLETE_DATE = alternation('complete-date', [
   regex('yesterday', 'ident', /^yesterday$/i),
 ]);
 
-const PARTIAL_RELATIONAL = alternation('partial-relation', [
+const RELATIVE = alternation('relative', [
   regex('before', 'ident', /^before$/i),
   regex('after', 'ident', /^(after|from|past)$/i),
 ]);
 
-const PARTIAL_COMPLETE = alternation('partial-complete', [
+const DIRECTIONAL = alternation('directional', [
   regex('last', 'ident', /^last$/i),
   regex('next', 'ident', /^next$/i),
   regex('this', 'ident', /^this$/i),
@@ -105,7 +110,11 @@ const DAYS = alternation('days', [
 
 const YEARS = regex('years', 'number', /^[1-9][0-9][0-9][0-9]+$/i);
 
-const ORDINAL_NUMBER = sequence('ordinal-number', [NUMBER, ORDINAL]);
+const DIRECTIONAL_SEQUENCE = quantifier(
+  'directional-sequence',
+  sequence('directional-part', [DIRECTIONAL, WHITESPACE]),
+  1,
+);
 
 const TIME_VALUE = sequence('time-value', [
   either(NUMBER, SINGULAR),
@@ -129,22 +138,25 @@ const DATE_VALUE = sequence('date-value', [
 // ]);
 
 const YEAR_PART = alternation('year-part', [
-  sequence('year-1', [YEAR, WHITESPACE, NUMBER]),
+  sequence('annotated-year', [YEAR, WHITESPACE, NUMBER]),
+  sequence('directional-year', [DIRECTIONAL_SEQUENCE, YEARS_UNIT]),
   YEARS,
 ]);
 
-const DAY_PART = alternation('day-part', [ORDINAL_NUMBER, NUMBER]);
+const DAY_PART = sequence('day-part', [NUMBER, optional(ORDINAL)]);
 
 const MONTH_PART = alternation('month-part', [
   // Match {month} {number}
-  sequence('month-part-1', [MONTHS, WHITESPACE, DAY_PART]),
-  sequence('month-part-2', [DAY_PART, WHITESPACE, MONTHS]),
+  sequence('month-day', [MONTHS, WHITESPACE, DAY_PART]),
+  sequence('day-month', [DAY_PART, WHITESPACE, MONTHS]),
+  // sequence('directional-month', [DIRECTIONAL_SEQUENCE, WHITESPACE, either(MONTHS_UNIT, MONTHS)]),
   MONTHS,
 ]);
 
 const SECONDS_PART = optional(
   sequence('seconds-part', [OPT_WHITESPACE, COLON, OPT_WHITESPACE, SECONDS]),
 );
+
 const MINUTES_PART = sequence('minutes-part', [
   OPT_WHITESPACE,
   COLON,
@@ -153,7 +165,7 @@ const MINUTES_PART = sequence('minutes-part', [
   SECONDS_PART,
 ]);
 
-const FULL_TIME = alternation('full-time', [
+const SPECIFIC_TIME = alternation('specific-time', [
   // Match 12-hour clock
   sequence('hour-12-clock', [
     HOUR_12,
@@ -163,28 +175,54 @@ const FULL_TIME = alternation('full-time', [
   ]),
   // Match 24-hour clock
   sequence('hour-24-clock', [HOUR_24, MINUTES_PART]),
+]);
+
+const FULL_TIME = alternation('full-time', [
+  SPECIFIC_TIME,
   // Match complete,
   COMPLETE_TIME,
 ]);
 
-const RELATIONAL_TIME = alternation('relational-time', [
-  // Match at (time)
-  sequence('at-time', [AT, WHITESPACE, FULL_TIME]),
+const TIME = sequence('time', [
+  optional(sequence('at-prefix', [AT, WHITESPACE])),
+  FULL_TIME,
 ]);
-
-const TIME = alternation('time', [FULL_TIME, RELATIONAL_TIME]);
 
 const SPECIFIC_DATE = alternation('specific-date', [
   sequence('date-format-1', [MONTH_PART, WHITESPACE, YEAR_PART]),
-  sequence('date-format-2', [MONTH_PART, WHITESPACE, NUMBER]),
-  sequence('date-format-3', [YEAR_PART, WHITESPACE, MONTH_PART]),
+  sequence('date-format-2', [YEAR_PART, WHITESPACE, MONTH_PART]),
+  sequence('date-format-3', [MONTH_PART, WHITESPACE, NUMBER]),
 ]);
 
-const RECURSIVE_PARTIAL_DATE: ASTMatcher = feed => PARTIAL_DATE(feed);
+const RELATIVE_DATE = alternation('relative-date', [
+  sequence('relative-day', [
+    DAYS,
+    WHITESPACE,
+    DIRECTIONAL_SEQUENCE,
+    WEEKS_UNIT,
+  ]),
+  sequence('relative-day', [
+    DIRECTIONAL_SEQUENCE,
+    WEEKS_UNIT,
+    WHITESPACE,
+    DAYS,
+  ]),
+  sequence('relative-month', [
+    MONTH_PART,
+    WHITESPACE,
+    DIRECTIONAL_SEQUENCE,
+    YEARS_UNIT,
+  ]),
+  sequence('relative-month', [
+    DIRECTIONAL_SEQUENCE,
+    YEARS_UNIT,
+    WHITESPACE,
+    MONTH_PART,
+  ]),
+]);
 
-const PARTIAL_DATE = sequence('partial-date', [
-  PARTIAL_COMPLETE,
-  WHITESPACE,
+const DIRECTIONAL_DATE = sequence('directional-date', [
+  DIRECTIONAL_SEQUENCE,
   either(
     // Next January 1
     MONTH_PART,
@@ -192,53 +230,46 @@ const PARTIAL_DATE = sequence('partial-date', [
     DATE_UNIT,
     // Next Sunday
     DAYS,
-    // Recurse
-    RECURSIVE_PARTIAL_DATE,
   ),
 ]);
 
-const RECURSIVE_PARTIAL_TIME: ASTMatcher = feed => PARTIAL_TIME(feed);
-
-const PARTIAL_TIME = sequence('partial-time', [
-  PARTIAL_COMPLETE,
-  WHITESPACE,
-  either(FULL_TIME, RECURSIVE_PARTIAL_TIME, TIME_UNIT),
+const DIRECTIONAL_TIME = sequence('directional-time', [
+  DIRECTIONAL_SEQUENCE,
+  either(TIME_UNIT, FULL_TIME),
 ]);
 
 const FULL_DATE = alternation('full-date', [
   SPECIFIC_DATE,
-  PARTIAL_DATE,
+  RELATIVE_DATE,
+  DIRECTIONAL_DATE,
   // Months
   MONTH_PART,
   // Match complete,
   COMPLETE_DATE,
 ]);
 
-const RELATIONAL_DATE = alternation('relational-date', [
-  sequence('on-date', [ON, WHITESPACE, FULL_DATE]),
+const DATE = sequence('date', [
+  optional(sequence('on-prefix', [ON, WHITESPACE])),
+  FULL_DATE,
 ]);
-
-const DATE = alternation('date', [FULL_DATE, RELATIONAL_DATE]);
 
 const INDEPENDENT_DATETIME = alternation('independent-date-time', [
   DATE,
   TIME,
-  PARTIAL_TIME,
+  DIRECTIONAL_TIME,
   COMPLETE,
 ]);
 
 const INDEPENDENT_FULL = alternation('independent-full-date-time', [
+  DIRECTIONAL_TIME,
   FULL_TIME,
   FULL_DATE,
-  PARTIAL_TIME,
   COMPLETE,
 ]);
 
 const DATE_TIME = alternation('date-time', [
-  sequence('date-time-1-1', [MONTH_PART, WHITESPACE, TIME]),
-  sequence('date-time-1-2', [TIME, WHITESPACE, MONTH_PART]),
-  sequence('date-time-2-1', [DATE, WHITESPACE, TIME]),
-  sequence('date-time-2-2', [TIME, WHITESPACE, DATE]),
+  sequence('date-time-sequence', [DATE, WHITESPACE, TIME]),
+  sequence('time-date-sequence', [TIME, WHITESPACE, DATE]),
   // Match {number} {unit} ago
   sequence('date-time-ago', [
     NUMBER,
@@ -255,18 +286,19 @@ const DATE_TIME = alternation('date-time', [
     WHITESPACE,
     either(TIME_UNIT, DATE_UNIT),
   ]),
-  // Match x {unit} before/after/from/until/past (date)
-  sequence('relational-date-time', [
+  // Match x {unit} relative (date)
+  sequence('relative-date-time', [
     either(TIME_VALUE, DATE_VALUE),
     WHITESPACE,
-    PARTIAL_RELATIONAL,
+    RELATIVE,
     WHITESPACE,
     INDEPENDENT_FULL,
+    // TODO recursion?
   ]),
   INDEPENDENT_DATETIME,
 ]);
 
-export function parseDateTime(token: Token[]): AST[] {
+export function categorize(token: Token[]): AST[] {
   const results: AST[] = [];
 
   const feed = createTokenFeed(token);

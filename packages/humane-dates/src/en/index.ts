@@ -1,5 +1,5 @@
-import { getDateTime } from './ast/date-time';
 import { type ExtractedHumaneDate, extract } from './extract';
+import { categorize } from './lexer';
 import { parseDateTime } from './parser';
 import { tokenize } from './tokenizer';
 
@@ -13,15 +13,12 @@ export function parse(
 ): ExtractedHumaneDate[] {
   const info: ExtractedHumaneDate[] = [];
   const tokens = tokenize(input);
-  const parsedNodes = parseDateTime(tokens);
+  const parsedNodes = categorize(tokens);
 
   for (let i = 0, len = parsedNodes.length; i < len; i++) {
     const node = parsedNodes[i];
-    const tree = getDateTime(node);
+    const tree = parseDateTime(node);
     if (tree) {
-      console.dir(tree, {
-        depth: null,
-      });
       info.push(extract(tree, referenceDate));
     }
   }

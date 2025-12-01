@@ -99,6 +99,39 @@ export function sequence<T extends ASTMatcher[]>(
   };
 }
 
+export function quantifier(
+  tag: string,
+  matcher: ASTMatcher,
+  min = 0,
+  max?: number,
+): ASTMatcher {
+  return feed => {
+    const results: AST[] = [];
+    const { cursor } = feed;
+    let count = 0;
+    while (true) {
+      if (max != null && count >= max) {
+        break;
+      }
+      const parsed = matcher(feed);
+      if (!parsed) {
+        break;
+      }
+      results.push(parsed);
+      count += 1;
+    }
+    if (count >= min) {
+      return {
+        tag,
+        kind: 'multi',
+        children: results,
+      };
+    }
+    feed.cursor = cursor;
+    return undefined;
+  };
+}
+
 export function optional<T extends ASTMatcher>(grammar: T): ASTMatcher {
   return (feed: TokenFeed): AST => {
     const result = grammar(feed);
