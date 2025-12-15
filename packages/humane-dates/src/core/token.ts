@@ -14,24 +14,29 @@ export function createTokenFeed(source: Token[]): TokenFeed {
   };
 }
 
-export interface SingleAST {
+export interface BaseAST {
+  start: number;
+  end: number;
+}
+
+export interface SingleAST extends BaseAST {
   tag: string;
   kind: 'solo';
   children: AST;
 }
 
-export interface MultiAST {
+export interface MultiAST extends BaseAST {
   tag: string;
   kind: 'multi';
   children: AST[];
 }
 
-export interface MaybeAST {
+export interface MaybeAST extends BaseAST {
   kind: 'maybe';
   children?: AST;
 }
 
-export interface ValueAST {
+export interface ValueAST extends BaseAST {
   kind: 'value';
   tag: string;
   children: string;
@@ -67,11 +72,31 @@ export function alternation<T extends ASTMatcher[]>(
           tag,
           kind: 'solo',
           children: result,
+          start: result.start,
+          end: result.end,
         };
       }
     }
     return undefined;
   };
+}
+
+function getFirst(ast: AST[]): AST | undefined {
+  for (let i = 0, len = ast.length; i < len; i++) {
+    if (ast[i].kind !== 'maybe') {
+      return ast[i];
+    }
+  }
+  return undefined;
+}
+
+function getLast(ast: AST[]): AST | undefined {
+  for (let i = ast.length - 1; i >= 0; i--) {
+    if (ast[i].kind !== 'maybe') {
+      return ast[i];
+    }
+  }
+  return undefined;
 }
 
 export function sequence<T extends ASTMatcher[]>(
@@ -91,11 +116,20 @@ export function sequence<T extends ASTMatcher[]>(
         return undefined;
       }
     }
-    return {
-      tag,
-      kind: 'multi',
-      children: results,
-    };
+
+    const first = getFirst(results);
+    const last = getLast(results);
+    if (first && last) {
+      return {
+        tag,
+        kind: 'multi',
+        children: results,
+        start: first.start,
+        end: last.end,
+      };
+    }
+    feed.cursor = cursor;
+    return undefined;
   };
 }
 
@@ -121,11 +155,17 @@ export function quantifier(
       count += 1;
     }
     if (count >= min) {
-      return {
-        tag,
-        kind: 'multi',
-        children: results,
-      };
+      const first = getFirst(results);
+      const last = getLast(results);
+      if (first && last) {
+        return {
+          tag,
+          kind: 'multi',
+          children: results,
+          start: first.start,
+          end: last.end,
+        };
+      }
     }
     feed.cursor = cursor;
     return undefined;
@@ -138,6 +178,8 @@ export function optional<T extends ASTMatcher>(grammar: T): ASTMatcher {
     return {
       kind: 'maybe',
       children: result ?? undefined,
+      start: result ? result.start : feed.cursor,
+      end: result ? result.end : feed.cursor,
     };
   };
 }
@@ -155,6 +197,8 @@ export function match(
           tag,
           kind: 'value',
           children: current.value,
+          start: current.start,
+          end: current.end,
         };
       }
     }

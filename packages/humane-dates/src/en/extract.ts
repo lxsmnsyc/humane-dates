@@ -68,26 +68,33 @@ const DAY_INDEX: Record<string, number> = {
   sat: 7,
 };
 
+export interface SpecifiedDateProperty {
+  year: boolean;
+  month: boolean;
+  day: boolean;
+  hours: boolean;
+  minutes: boolean;
+  seconds: boolean;
+}
+
 export interface ExtractedHumaneDate {
   date: Date;
   reference: Date;
+  input: string;
 
-  specified: {
-    year: boolean;
-    month: boolean;
-    day: boolean;
-    hours: boolean;
-    minutes: boolean;
-    seconds: boolean;
-  };
+  specified: SpecifiedDateProperty;
 }
 
-function createExtractedHumaneDate(referenceDate: Date): ExtractedHumaneDate {
+function createExtractedHumaneDate(
+  referenceDate: Date,
+  input: string,
+): ExtractedHumaneDate {
   const cloned = new Date(referenceDate);
 
   return {
     date: cloned,
     reference: new Date(cloned),
+    input,
 
     specified: {
       year: false,
@@ -162,12 +169,12 @@ function extractMonths(node: MonthsNode): number {
 
 function extractMonthPart(node: MonthPartNode): {
   month: number;
-  day?: number;
+  date?: number;
 } {
   if (node.value.type === 'month-day') {
     return {
       month: extractMonths(node.value.month),
-      day: node.value.day.value,
+      date: node.value.day.value,
     };
   }
   return {
@@ -206,10 +213,10 @@ function extractDirectionalDate(
     case 'month-part': {
       const monthPart = extractMonthPart(node.value);
       // Create a dummy date
-      let base = new Date(
+      const base = new Date(
         state.date.getFullYear(),
         monthPart.month,
-        monthPart.day,
+        monthPart.date,
       );
       let offset = node.offset;
       if (offset < 0) {
@@ -219,10 +226,9 @@ function extractDirectionalDate(
           offset += 1;
         }
       }
-      base = addYears(base, offset);
-      state.specified.year = true;
+      state.date = addYears(base, offset);
       state.specified.month = true;
-      if (monthPart.day != null) {
+      if (monthPart.date != null) {
         state.specified.day = true;
       }
       break;
@@ -279,7 +285,11 @@ function extractDateFormat(
     state.date = addYears(state.date, node.year.value.value);
   }
   state.date = set(state.date, monthPart);
-  setDateSpecified(state);
+  state.specified.year = true;
+  state.specified.month = true;
+  if (monthPart.date != null) {
+    state.specified.day = true;
+  }
 }
 
 function extractSpecificDate(
@@ -298,8 +308,12 @@ function extractFullDate(state: ExtractedHumaneDate, node: FullDateNode): void {
       extractDirectionalDate(state, node.value);
       break;
     case 'month-part': {
-      state.date = set(state.date, extractMonthPart(node.value));
-      setDateSpecified(state);
+      const extracted = extractMonthPart(node.value);
+      state.date = set(state.date, extracted);
+      state.specified.month = true;
+      if (extracted.date != null) {
+        state.specified.day = true;
+      }
       break;
     }
     case 'relative-date':
@@ -468,7 +482,6 @@ function extractComplete(state: ExtractedHumaneDate, node: CompleteNode): void {
   switch (node.value) {
     case 'now':
       setDateSpecified(state);
-
       break;
   }
 }
@@ -527,8 +540,9 @@ function extractRelativeDateTime(
 export function extract(
   node: DateTimeNode,
   referenceDate: Date,
+  input: string,
 ): ExtractedHumaneDate {
-  const state = createExtractedHumaneDate(referenceDate);
+  const state = createExtractedHumaneDate(referenceDate, input);
   switch (node.value.type) {
     case 'date-time-ago':
       extractDateTimeAgo(state, node.value);

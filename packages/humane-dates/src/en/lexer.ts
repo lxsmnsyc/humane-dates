@@ -1,6 +1,7 @@
 import type { Token } from '../core/matcher';
 import {
   type AST,
+  type TokenFeed,
   alternation,
   createTokenFeed,
   either,
@@ -15,6 +16,7 @@ import {
 const WHITESPACE = tag('whitespace', 'whitespace');
 const OPT_WHITESPACE = optional(WHITESPACE);
 
+const IDENT = tag('ident', 'ident');
 const NUMBER = tag('number', 'number');
 const ORDINAL = regex('ordinal', 'ident', /^(st|nd|rd|th)$/i);
 const SINGULAR = regex('singular', 'ident', /^an?$/i);
@@ -93,7 +95,7 @@ const MONTHS = alternation('months', [
   regex('jul', 'ident', /^jul(y|\.?)$/i),
   regex('aug', 'ident', /^aug(ust|\.?)$/i),
   regex('sep', 'ident', /^sep(tember|\.?)$/i),
-  regex('oct', 'ident', /^oct(tober|\.?)$/i),
+  regex('oct', 'ident', /^oct(ober|\.?)$/i),
   regex('nov', 'ident', /^nov(ember|\.?)$/i),
   regex('dec', 'ident', /^dec(ember|\.?)$/i),
 ]);
@@ -108,7 +110,12 @@ const DAYS = alternation('days', [
   regex('sat', 'ident', /^sat(urday|\.?)$/i),
 ]);
 
-const YEARS = regex('years', 'number', /^[1-9][0-9][0-9][0-9]+$/i);
+const DAY_NUMBER = regex(
+  'day-number',
+  'number',
+  /^(0?[0-9]|1[0-9]|2[0-9]|3[01])$/i,
+);
+const YEAR_NUMBER = regex('year-number', 'number', /^[1-9][0-9][0-9][0-9]+$/i);
 
 const DIRECTIONAL_SEQUENCE = quantifier(
   'directional-sequence',
@@ -140,15 +147,15 @@ const DATE_VALUE = sequence('date-value', [
 const YEAR_PART = alternation('year-part', [
   sequence('annotated-year', [YEAR, WHITESPACE, NUMBER]),
   sequence('directional-year', [DIRECTIONAL_SEQUENCE, YEARS_UNIT]),
-  YEARS,
+  YEAR_NUMBER,
 ]);
 
-const DAY_PART = sequence('day-part', [NUMBER, optional(ORDINAL)]);
+const DAY_PART = sequence('day-part', [DAY_NUMBER, optional(ORDINAL)]);
 
 const MONTH_PART = alternation('month-part', [
   // Match {month} {number}
-  sequence('month-day', [MONTHS, WHITESPACE, DAY_PART]),
   sequence('day-month', [DAY_PART, WHITESPACE, MONTHS]),
+  sequence('month-day', [MONTHS, WHITESPACE, DAY_PART]),
   // sequence('directional-month', [DIRECTIONAL_SEQUENCE, WHITESPACE, either(MONTHS_UNIT, MONTHS)]),
   MONTHS,
 ]);
@@ -267,50 +274,108 @@ const INDEPENDENT_FULL = alternation('independent-full-date-time', [
   COMPLETE,
 ]);
 
+const DATE_TIME_SEQUENCE = sequence('date-time-sequence', [
+  DATE,
+  WHITESPACE,
+  TIME,
+]);
+const TIME_DATE_SEQUENCE = sequence('time-date-sequence', [
+  TIME,
+  WHITESPACE,
+  DATE,
+]);
+// Match {number} {unit} ago
+const DATE_TIME_AGO = sequence('date-time-ago', [
+  NUMBER,
+  WHITESPACE,
+  either(TIME_UNIT, DATE_UNIT),
+  WHITESPACE,
+  AGO,
+]);
+// Match in {number} {unit}
+const IN_DATE_TIME = sequence('in-date-time', [
+  IN,
+  WHITESPACE,
+  NUMBER,
+  WHITESPACE,
+  either(TIME_UNIT, DATE_UNIT),
+]);
+// Match x {unit} relative (date)
+const RELATIVE_DATE_TIME = sequence('relative-date-time', [
+  either(TIME_VALUE, DATE_VALUE),
+  WHITESPACE,
+  RELATIVE,
+  WHITESPACE,
+  INDEPENDENT_FULL,
+  // TODO recursion?
+]);
+
 const DATE_TIME = alternation('date-time', [
-  sequence('date-time-sequence', [DATE, WHITESPACE, TIME]),
-  sequence('time-date-sequence', [TIME, WHITESPACE, DATE]),
-  // Match {number} {unit} ago
-  sequence('date-time-ago', [
-    NUMBER,
-    WHITESPACE,
-    either(TIME_UNIT, DATE_UNIT),
-    WHITESPACE,
-    AGO,
-  ]),
-  // Match in {number} {unit}
-  sequence('in-date-time', [
-    IN,
-    WHITESPACE,
-    NUMBER,
-    WHITESPACE,
-    either(TIME_UNIT, DATE_UNIT),
-  ]),
-  // Match x {unit} relative (date)
-  sequence('relative-date-time', [
-    either(TIME_VALUE, DATE_VALUE),
-    WHITESPACE,
-    RELATIVE,
-    WHITESPACE,
-    INDEPENDENT_FULL,
-    // TODO recursion?
-  ]),
+  DATE_TIME_SEQUENCE,
+  TIME_DATE_SEQUENCE,
+  DATE_TIME_AGO,
+  IN_DATE_TIME,
+  RELATIVE_DATE_TIME,
   INDEPENDENT_DATETIME,
 ]);
 
-export function categorize(token: Token[]): AST[] {
-  const results: AST[] = [];
+export interface CategorizeResult {
+  nodes: AST[];
+  tokens: Token[];
+}
+
+export function categorize(token: Token[]): CategorizeResult {
+  const result: CategorizeResult = {
+    nodes: [],
+    tokens: [],
+  };
 
   const feed = createTokenFeed(token);
   while (feed.cursor < feed.size) {
-    const result = DATE_TIME(feed);
-    if (result) {
-      results.push(result);
+    const node = DATE_TIME(feed);
+    if (node) {
+      result.nodes.push(node);
     } else {
-      console.log('whut', feed.source[feed.cursor]);
+      result.tokens.push(feed.source[feed.cursor]);
       feed.cursor++;
     }
   }
 
-  return results;
+  return result;
+}
+
+export type IntellisenseLexerResult =
+  | { type: 'ast'; value: AST }
+  | { type: 'token'; value: Token };
+
+const N_I_I = sequence('n-i-i', [NUMBER, WHITESPACE, IDENT, WHITESPACE, IDENT]);
+const I_N_I = sequence('i-n-i', [IDENT, WHITESPACE, NUMBER, WHITESPACE, IDENT]);
+const I_I_N = sequence('i-i-n', [IDENT, WHITESPACE, IDENT, WHITESPACE, NUMBER]);
+const N_I = sequence('n-i', [NUMBER, WHITESPACE, IDENT]);
+const I_N = sequence('i-n', [IDENT, WHITESPACE, NUMBER]);
+
+const INTELLISENSE = (feed: TokenFeed) =>
+  DATE_TIME(feed) ||
+  N_I_I(feed) ||
+  I_N_I(feed) ||
+  I_I_N(feed) ||
+  N_I(feed) ||
+  I_N(feed) ||
+  IDENT(feed) ||
+  NUMBER(feed);
+
+export function categorizeForIntellisense(token: Token[]): AST[] {
+  const result: AST[] = [];
+
+  const feed = createTokenFeed(token);
+  while (feed.cursor < feed.size) {
+    const node = INTELLISENSE(feed);
+    if (node) {
+      result.push(node);
+    } else {
+      feed.cursor++;
+    }
+  }
+
+  return result;
 }

@@ -361,7 +361,7 @@ export interface MonthDayNode {
 }
 
 function parseMonthPart1(ast: AST): MonthDayNode | undefined {
-  if (ast.kind === 'multi' && ast.tag === 'month-part-1') {
+  if (ast.kind === 'multi' && ast.tag === 'month-day') {
     // month whitespace day
     const month = parseMonths(ast.children[0]);
     const day = parseDayPart(ast.children[2]);
@@ -377,7 +377,7 @@ function parseMonthPart1(ast: AST): MonthDayNode | undefined {
 }
 
 function parseMonthPart2(ast: AST): MonthDayNode | undefined {
-  if (ast.kind === 'multi' && ast.tag === 'month-part-2') {
+  if (ast.kind === 'multi' && ast.tag === 'day-month') {
     // day whitespace month
     const month = parseMonths(ast.children[2]);
     const day = parseDayPart(ast.children[0]);
