@@ -1,8 +1,5 @@
-import { AST } from '../core/token';
 import fuzzysearch from '../utils/fuzzy-search';
 import { levenshtein } from '../utils/levehnstein';
-import { categorizeForIntellisense } from './lexer';
-import { tokenize } from './tokenizer';
 
 const MONTHS = [
   'January',
@@ -29,21 +26,44 @@ const DAYS = [
   'Saturday',
 ];
 
-const RELATIVE = ['before', 'after', 'from'];
-
 const DIRECTIONAL = ['next', 'last', 'this'];
 
 const IDENTIFIERS = ['in', 'at', 'on'];
 
-const COMPLETE = ['now'];
+const COMPLETE = ['Now'];
 
-const COMPLETE_DATE = ['tomorrow', 'today', 'yesterday'];
+const COMPLETE_DATE = ['Tomorrow', 'Today', 'Yesterday'];
 
-const COMPLETE_TIME = ['midnight', 'noon'];
+const COMPLETE_TIME = ['Midnight', 'Noon'];
 
 const DATE_UNIT = ['days', 'weeks', 'months', 'years'];
 
 const TIME_UNIT = ['minutes', 'seconds', 'hours'];
+
+const DENOMS: Record<string, [interval: number, max: number]> = {
+  seconds: [5, 60],
+  minutes: [5, 60],
+  hours: [1, 6],
+  days: [1, 6],
+  weeks: [1, 3],
+  months: [1, 6],
+  years: [1, 5],
+};
+
+const MONTHS_DENOM: Record<string, number> = {
+  January: 31,
+  February: 29,
+  March: 31,
+  April: 30,
+  May: 31,
+  June: 30,
+  July: 31,
+  August: 31,
+  September: 30,
+  October: 31,
+  November: 30,
+  December: 31,
+};
 
 function measure(token: string, options: string[]): string[] {
   const filtered: string[] = [];
@@ -68,99 +88,132 @@ function measure(token: string, options: string[]): string[] {
   return keywords;
 }
 
-function intersection(arr1: string[], arr2: string[]) {
-  // 1. Create a Set from the smaller array for quick lookups using has()
-  const set1 = new Set(arr1);
-
-  // 2. Filter the second array, keeping only elements present in the Set
-  const intersectArray = arr2.filter(item => set1.has(item));
-
-  // 3. Create a new Set from the results to ensure uniqueness, then convert back to an array
-  return Array.from(new Set(intersectArray));
-}
-
-function populateMonthSuffix(value: string): string[] {
-  const state: string[] = [];
-  for (const month of MONTHS) {
-    state.push(`${month} ${value}`);
-  }
-  return state;
-}
-
-function populateMonthPrefix(value: string): string[] {
+function populateByValue(value: string): string[] {
   const state: string[] = [];
   for (const month of MONTHS) {
     state.push(`${value} ${month}`);
+    state.push(`${month} ${value}`);
   }
-  return state;
-}
-
-function populateIn(value: string): string[] {
-  const state: string[] = [];
   for (const unit of DATE_UNIT) {
     state.push(`In ${value} ${unit}`);
-  }
-  for (const unit of TIME_UNIT) {
-    state.push(`In ${value} ${unit}`);
-  }
-  return state;
-}
-
-function populateAgo(value: string): string[] {
-  const state: string[] = [];
-  for (const unit of DATE_UNIT) {
     state.push(`${value} ${unit} ago`);
   }
   for (const unit of TIME_UNIT) {
+    state.push(`In ${value} ${unit}`);
     state.push(`${value} ${unit} ago`);
   }
   return state;
 }
 
-function processSequence(input: string, sequence: AST[]): string[] {
-  const current = sequence[0];
-  const source = input.substring(current.start, current.end);
+function populateByDirectional(value: string): string[] {
+  const state: string[] = [];
+  for (const unit of COMPLETE_TIME) {
+    state.push(`${value} ${unit}`);
+  }
+  for (const unit of TIME_UNIT) {
+    state.push(`${value} ${unit}`);
+  }
+  for (const unit of DATE_UNIT) {
+    state.push(`${value} ${unit}`);
+  }
+  for (const day of DAYS) {
+    state.push(`${value} ${day}`);
+  }
+  for (const month of MONTHS) {
+    state.push(`${value} ${month}`);
+  }
+  // Units
+  return state;
+}
+
+function populateByUnit(value: string): string[] {
+  const results: string[] = [];
+  const [interval, max] = DENOMS[value];
+  for (let i = interval; i <= max; i += interval) {
+    results.push(`In ${i} ${value}`);
+    results.push(`${i} ${value} ago`);
+  }
+  return results;
+}
+
+function populateByMonth(value: string): string[] {
+  const results: string[] = [];
+  for (let i = 1; i <= MONTHS_DENOM[value]; i++) {
+    // results.push(`${i} ${value}`);
+    results.push(`${value} ${i}`);
+  }
+  return results;
+}
+
+function populateByKeyword(value: string): string[] {
+  const matches = measure(value, [
+    ...MONTHS,
+    ...DAYS,
+    ...DIRECTIONAL,
+    ...IDENTIFIERS,
+    ...COMPLETE,
+    ...COMPLETE_DATE,
+    ...COMPLETE_TIME,
+    ...DATE_UNIT,
+    ...TIME_UNIT,
+  ]);
 
   let state: string[] = [];
 
-  if (current.kind === 'multi') {
-    // parse N_I_I
-    if (current.tag === 'n-i-i') {
-    } else if (current.tag === 'i-n-i') {
-    } else if (current.tag === 'i-i-n') {
-    } else if (current.tag === 'n-i') {
-      const amount = current.children[0];
-      if (amount.kind === 'value') {
-        // Do day-month
-        state = state.concat(populateMonthSuffix(amount.children));
-        // Do units
-        state = state.concat(populateIn(amount.children));
-        state = state.concat(populateAgo(amount.children));
-      }
-      state = measure(source, state);
-    } else if (current.tag === 'i-n') {
-      const amount = current.children[2];
-      if (amount.kind === 'value') {
-        // Do day-month
-        state = state.concat(populateMonthPrefix(amount.children));
-      }
-      console.log(source, state);
-      state = measure(source, state);
+  for (const match of matches) {
+    if (
+      COMPLETE.includes(match) ||
+      COMPLETE_DATE.includes(match) ||
+      COMPLETE_TIME.includes(match)
+    ) {
+      state.push(match);
     }
-  } else if (current.kind === 'solo') {
-    if (current.tag === 'date-time') {
-      return completeDate;
+    if (DIRECTIONAL.includes(match)) {
+      state = state.concat(populateByDirectional(match));
     }
-  } else if (current.kind === 'value') {
+    if (DATE_UNIT.includes(match) || TIME_UNIT.includes(match)) {
+      state = state.concat(populateByUnit(match));
+    }
+    if (MONTHS.includes(match)) {
+      state = state.concat(populateByMonth(match));
+    }
   }
-  return state;
+
+  return [...new Set(state)];
 }
 
-export function suggest(input: string,): string[] {
-  const tokens = tokenize(input);
-  const sequence = categorizeForIntellisense(tokens);
+const N_I = /([0-9]+)\s+\w+/i;
+const I_N = /\w+\s+([0-9]+)/i;
+const NUMBER_ONLY = /[0-9]+/i;
+const IDENTIFIER_ONLY = /\w+/i;
 
-  console.log(sequence);
+export function suggest(input: string): string[] {
+  const resultA = N_I.exec(input);
+  if (resultA) {
+    const [pattern, value] = resultA;
+    const results = populateByValue(value);
+    return measure(pattern, results);
+  }
 
-  return measure(input, processSequence(input, sequence));
+  const resultB = I_N.exec(input);
+  if (resultB) {
+    const [pattern, value] = resultB;
+    const results = populateByValue(value);
+    return measure(pattern, results);
+  }
+
+  const resultC = NUMBER_ONLY.exec(input);
+  if (resultC) {
+    const [value] = resultC;
+    const results = populateByValue(value);
+    return measure(value, results);
+  }
+
+  const resultD = IDENTIFIER_ONLY.exec(input);
+  if (resultD) {
+    const [value] = resultD;
+    return measure(value, populateByKeyword(input));
+  }
+
+  return measure(input, populateByKeyword(input));
 }

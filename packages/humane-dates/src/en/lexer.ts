@@ -1,7 +1,6 @@
 import type { Token } from '../core/matcher';
 import {
   type AST,
-  type TokenFeed,
   alternation,
   createTokenFeed,
   either,
@@ -16,7 +15,6 @@ import {
 const WHITESPACE = tag('whitespace', 'whitespace');
 const OPT_WHITESPACE = optional(WHITESPACE);
 
-const IDENT = tag('ident', 'ident');
 const NUMBER = tag('number', 'number');
 const ORDINAL = regex('ordinal', 'ident', /^(st|nd|rd|th)$/i);
 const SINGULAR = regex('singular', 'ident', /^an?$/i);
@@ -337,42 +335,6 @@ export function categorize(token: Token[]): CategorizeResult {
       result.nodes.push(node);
     } else {
       result.tokens.push(feed.source[feed.cursor]);
-      feed.cursor++;
-    }
-  }
-
-  return result;
-}
-
-export type IntellisenseLexerResult =
-  | { type: 'ast'; value: AST }
-  | { type: 'token'; value: Token };
-
-const N_I_I = sequence('n-i-i', [NUMBER, WHITESPACE, IDENT, WHITESPACE, IDENT]);
-const I_N_I = sequence('i-n-i', [IDENT, WHITESPACE, NUMBER, WHITESPACE, IDENT]);
-const I_I_N = sequence('i-i-n', [IDENT, WHITESPACE, IDENT, WHITESPACE, NUMBER]);
-const N_I = sequence('n-i', [NUMBER, WHITESPACE, IDENT]);
-const I_N = sequence('i-n', [IDENT, WHITESPACE, NUMBER]);
-
-const INTELLISENSE = (feed: TokenFeed) =>
-  DATE_TIME(feed) ||
-  N_I_I(feed) ||
-  I_N_I(feed) ||
-  I_I_N(feed) ||
-  N_I(feed) ||
-  I_N(feed) ||
-  IDENT(feed) ||
-  NUMBER(feed);
-
-export function categorizeForIntellisense(token: Token[]): AST[] {
-  const result: AST[] = [];
-
-  const feed = createTokenFeed(token);
-  while (feed.cursor < feed.size) {
-    const node = INTELLISENSE(feed);
-    if (node) {
-      result.push(node);
-    } else {
       feed.cursor++;
     }
   }
