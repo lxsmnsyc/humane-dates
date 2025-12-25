@@ -138,19 +138,14 @@ function populateByMonth(value: string): string[] {
     // results.push(`${i} ${value}`);
     results.push(`${value} ${i}`);
   }
+  populateByDirections(results, value);
   return results;
 }
 
-
-function populateByDays(value: string): string[] {
-  const results: string[] = [];
-  for (let i = 1; i <= MONTHS_DENOM[value]; i++) {
-    // results.push(`${i} ${value}`);
-    results.push(`Next ${value}`);
-    results.push(`Last ${value}`);
-    results.push(`This ${value}`);
-  }
-  return results;
+function populateByDirections(results: string[], value: string): void {
+  results.push(`Next ${value}`);
+  results.push(`Last ${value}`);
+  results.push(`This ${value}`);
 }
 
 function populateByKeyword(value: string): string[] {
@@ -186,7 +181,7 @@ function populateByKeyword(value: string): string[] {
       state = state.concat(populateByMonth(match));
     }
     if (DAYS.includes(match)) {
-      state = state.concat(populateByDays(match));
+      populateByDirections(state, match);
     }
   }
 
