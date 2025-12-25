@@ -141,6 +141,18 @@ function populateByMonth(value: string): string[] {
   return results;
 }
 
+
+function populateByDays(value: string): string[] {
+  const results: string[] = [];
+  for (let i = 1; i <= MONTHS_DENOM[value]; i++) {
+    // results.push(`${i} ${value}`);
+    results.push(`Next ${value}`);
+    results.push(`Last ${value}`);
+    results.push(`This ${value}`);
+  }
+  return results;
+}
+
 function populateByKeyword(value: string): string[] {
   const matches = measure(value, [
     ...MONTHS,
@@ -172,6 +184,9 @@ function populateByKeyword(value: string): string[] {
     }
     if (MONTHS.includes(match)) {
       state = state.concat(populateByMonth(match));
+    }
+    if (DAYS.includes(match)) {
+      state = state.concat(populateByDays(match));
     }
   }
 
