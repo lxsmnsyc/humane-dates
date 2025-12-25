@@ -1,5 +1,11 @@
 # humane-dates
 
+## 0.1.2
+
+### Patch Changes
+
+- fix days
+
 ## 0.1.1
 
 ### Patch Changes
