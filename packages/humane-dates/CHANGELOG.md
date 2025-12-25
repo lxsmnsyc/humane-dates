@@ -1,5 +1,11 @@
 # humane-dates
 
+## 0.1.4
+
+### Patch Changes
+
+- fix pattern matching
+
 ## 0.1.3
 
 ### Patch Changes

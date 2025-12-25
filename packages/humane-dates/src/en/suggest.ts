@@ -188,9 +188,9 @@ function populateByKeyword(value: string): string[] {
   return [...new Set(state)];
 }
 
-const I_I = /(\w)+\s+(\w+)/i;
-const N_I = /([0-9]+)\s+\w+/i;
-const I_N = /\w+\s+([0-9]+)/i;
+const I_I = /([A-Za-z]+)\s+([A-Za-z]+)/i;
+const N_I = /([0-9]+)\s+[A-Za-z]+/i;
+const I_N = /[A-Za-z]+\s+([0-9]+)/i;
 const NUMBER_ONLY = /[0-9]+/i;
 const IDENTIFIER_ONLY = /\w+/i;
 
