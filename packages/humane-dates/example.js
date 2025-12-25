@@ -4,4 +4,4 @@ const parsed = en.parse('next friday', {
   referenceDate: new Date(),
 });
 console.log(parsed[0].date.toUTCString());
-console.log(en.suggest('next f'));
+console.log(en.suggest('ja'));
