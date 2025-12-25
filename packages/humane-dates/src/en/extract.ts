@@ -179,6 +179,7 @@ function extractMonthPart(node: MonthPartNode): {
   }
   return {
     month: extractMonths(node.value),
+    date: 1,
   };
 }
 

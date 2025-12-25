@@ -26,7 +26,7 @@ const DAYS = [
   'Saturday',
 ];
 
-const DIRECTIONAL = ['next', 'last', 'this'];
+const DIRECTIONAL = ['Next', 'Last', 'This'];
 
 const IDENTIFIERS = ['in', 'at', 'on'];
 
@@ -37,6 +37,8 @@ const COMPLETE_DATE = ['Tomorrow', 'Today', 'Yesterday'];
 const COMPLETE_TIME = ['Midnight', 'Noon'];
 
 const DATE_UNIT = ['days', 'weeks', 'months', 'years'];
+
+const DATE_UNIT_SINGULAR = ['day', 'week', 'month', 'year'];
 
 const TIME_UNIT = ['minutes', 'seconds', 'hours'];
 
@@ -110,17 +112,11 @@ function populateByDirectional(value: string): string[] {
   for (const unit of COMPLETE_TIME) {
     state.push(`${value} ${unit}`);
   }
-  for (const unit of TIME_UNIT) {
-    state.push(`${value} ${unit}`);
-  }
-  for (const unit of DATE_UNIT) {
+  for (const unit of DATE_UNIT_SINGULAR) {
     state.push(`${value} ${unit}`);
   }
   for (const day of DAYS) {
     state.push(`${value} ${day}`);
-  }
-  for (const month of MONTHS) {
-    state.push(`${value} ${month}`);
   }
   // Units
   return state;
@@ -182,12 +178,22 @@ function populateByKeyword(value: string): string[] {
   return [...new Set(state)];
 }
 
+const I_I = /(\w)+\s+(\w+)/i;
 const N_I = /([0-9]+)\s+\w+/i;
 const I_N = /\w+\s+([0-9]+)/i;
 const NUMBER_ONLY = /[0-9]+/i;
 const IDENTIFIER_ONLY = /\w+/i;
 
 export function suggest(input: string): string[] {
+  const result0 = I_I.exec(input);
+  if (result0) {
+    const [pattern, left, right] = result0;
+    const results = Array.from(
+      new Set([...populateByKeyword(left), ...populateByKeyword(right)]),
+    );
+    return measure(pattern, results);
+  }
+
   const resultA = N_I.exec(input);
   if (resultA) {
     const [pattern, value] = resultA;
@@ -206,13 +212,13 @@ export function suggest(input: string): string[] {
   if (resultC) {
     const [value] = resultC;
     const results = populateByValue(value);
-    return measure(value, results);
+    return measure(input, results);
   }
 
   const resultD = IDENTIFIER_ONLY.exec(input);
   if (resultD) {
     const [value] = resultD;
-    return measure(value, populateByKeyword(input));
+    return measure(input, populateByKeyword(value));
   }
 
   return measure(input, populateByKeyword(input));
