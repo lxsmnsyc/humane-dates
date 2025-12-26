@@ -227,6 +227,7 @@ function extractDirectionalDate(
         }
       }
       state.date = addYears(base, offset);
+      state.specified.year = true;
       state.specified.month = true;
       if (monthPart.date != null) {
         state.specified.day = true;

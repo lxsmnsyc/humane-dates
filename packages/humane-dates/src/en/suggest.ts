@@ -220,13 +220,13 @@ function completion(input: string, referenceDate: Date): string[] {
   const results = [];
 
   if (!info.specified.year) {
-    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]} ${info.date.getDate() + 1}`;
+    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]} ${info.date.getDate()}`;
     const baseYear = info.date.getFullYear();
     for (let i = -5; i <= 5; i++) {
       results.push(`${base} ${baseYear + i}`);
     }
   } else if (!info.specified.month) {
-    const base = `${info.date.getDate() + 1} ${info.date.getFullYear()}`;
+    const base = `${info.date.getDate()} ${info.date.getFullYear()}`;
     for (let i = 0; i <= 11; i++) {
       results.push(`on ${SHORTHAND_MONTH[i]} ${base}`);
     }
