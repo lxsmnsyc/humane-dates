@@ -179,7 +179,6 @@ function extractMonthPart(node: MonthPartNode): {
   }
   return {
     month: extractMonths(node.value),
-    date: 1,
   };
 }
 
@@ -217,7 +216,7 @@ function extractDirectionalDate(
       const base = new Date(
         state.date.getFullYear(),
         monthPart.month,
-        monthPart.date,
+        monthPart.date ?? 1,
       );
       let offset = node.offset;
       if (offset < 0) {
@@ -258,6 +257,11 @@ function extractRelativeMonth(
 ): void {
   const monthPart = extractMonthPart(node.month);
   state.date = addYears(set(state.date, monthPart), node.offset);
+  state.specified.year = true;
+  state.specified.month = true;
+  if (monthPart.date != null) {
+    state.specified.day = true;
+  }
 }
 
 function extractRelativeDate(
@@ -267,12 +271,12 @@ function extractRelativeDate(
   switch (node.value.type) {
     case 'relative-day':
       extractRelativeDay(state, node.value);
+      setDateSpecified(state);
       break;
     case 'relative-month':
       extractRelativeMonth(state, node.value);
       break;
   }
-  setDateSpecified(state);
 }
 
 function extractDateFormat(

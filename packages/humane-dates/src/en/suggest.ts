@@ -1,5 +1,6 @@
 import fuzzysearch from '../utils/fuzzy-search';
 import { levenshtein } from '../utils/levehnstein';
+import { parse } from './api';
 
 const MONTHS = [
   'January',
@@ -194,7 +195,78 @@ const I_N = /[A-Za-z]+\s+([0-9]+)/i;
 const NUMBER_ONLY = /[0-9]+/i;
 const IDENTIFIER_ONLY = /\w+/i;
 
-export function suggest(input: string): string[] {
+const SHORTHAND_MONTH = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+function completion(input: string, referenceDate: Date): string[] {
+  const parsed = parse(input, { referenceDate });
+  if (parsed.length === 0) {
+    return [];
+  }
+  const info = parsed[0];
+
+  const results = [];
+
+  if (!info.specified.year) {
+    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]} ${info.date.getDate() + 1}`;
+    const baseYear = info.date.getFullYear();
+    for (let i = -5; i <= 5; i++) {
+      results.push(`${base} ${baseYear + i}`);
+    }
+  } else if (!info.specified.month) {
+    const base = `${info.date.getDate() + 1} ${info.date.getFullYear()}`;
+    for (let i = 0; i <= 11; i++) {
+      results.push(`on ${SHORTHAND_MONTH[i]} ${base}`);
+    }
+  } else if (!info.specified.day) {
+    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]}`;
+    for (
+      let i = 1, max = MONTHS_DENOM[MONTHS[info.date.getMonth()]];
+      i <= max;
+      i++
+    ) {
+      results.push(`${base} ${i} ${info.date.getFullYear()}`);
+    }
+  } else if (!info.specified.hours) {
+    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]} ${info.date.getDate()} ${info.date.getFullYear()}`;
+    for (let i = 0, max = 24; i <= max; i++) {
+      results.push(`${base} at ${i}:00`);
+    }
+  } else if (!info.specified.minutes) {
+    const base = `on ${SHORTHAND_MONTH[info.date.getMonth()]} ${info.date.getDate()} ${info.date.getFullYear()} at ${info.date.getHours()}`;
+    for (
+      let i = DENOMS.minutes[0], max = DENOMS.minutes[1];
+      i < max;
+      i += DENOMS.minutes[0]
+    ) {
+      if (i < 10) {
+        results.push(`${base}:0${i}`);
+      } else {
+        results.push(`${base}:${i}`);
+      }
+    }
+  }
+
+  return results;
+}
+
+export function suggest(input: string, referenceDate = new Date()): string[] {
+  const parsed = completion(input, referenceDate);
+  if (parsed.length > 0) {
+    return parsed;
+  }
   const result0 = I_I.exec(input);
   if (result0) {
     const [pattern, left, right] = result0;
